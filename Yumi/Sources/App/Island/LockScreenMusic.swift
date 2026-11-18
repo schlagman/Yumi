@@ -71,8 +71,9 @@ private struct LockScreenSpace {
         let connection = unsafeBitCast(main, to: MainConnection.self)()
         let space = unsafeBitCast(create, to: SpaceCreate.self)(connection, 1, 0)
         guard space != 0 else { return nil }
-        // shortcut: 100 is the level other lock screen apps use, found by trying; no constant exists
-        _ = unsafeBitCast(level, to: SetLevel.self)(connection, space, 100)
+        // SkyLight's absolute levels: 300 is the lock screen itself (anything lower shows only until
+        // it draws), 400 the notifications shown over it
+        _ = unsafeBitCast(level, to: SetLevel.self)(connection, space, 400)
         _ = unsafeBitCast(show, to: ShowSpaces.self)(connection, [NSNumber(value: space)] as CFArray)
         return LockScreenSpace(connection: connection, space: space, addWindows: unsafeBitCast(add, to: AddWindows.self))
     }
