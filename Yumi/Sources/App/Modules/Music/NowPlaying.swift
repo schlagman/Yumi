@@ -151,6 +151,8 @@ enum TitlePlayback {
         // Safari plays through WebKit's processes, shared with the other apps that show web pages
         case "com.apple.safari":    owners = ["com.apple.webkit"]
         case "org.mozilla.firefox": owners = [id, "org.mozilla.plugincontainer"]
+        // shortcut: Dia plays through Arc's helper, so Arc's sound counts for Dia when both run
+        case "company.thebrowser.dia": owners = [id, "company.thebrowser.browser.helper"]
         default:                    owners = [id]
         }
         return audible.contains { process in owners.contains { process == $0 || process.hasPrefix($0 + ".") } }

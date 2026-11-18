@@ -77,6 +77,7 @@ import UniformTypeIdentifiers
         #expect(script?.contains("tell application id \"com.google.Chrome\"") == true)
         #expect(script?.contains("contains \"Le \\\"vrai\\\" titre\"") == true)
         #expect(MusicArtwork.tabScript(browser: "com.apple.Safari", title: "x")?.contains("(name of t)") == true)
+        #expect(MusicArtwork.tabScript(browser: "company.thebrowser.dia", title: "x")?.contains("(title of t)") == true)
         #expect(MusicArtwork.tabScript(browser: "org.mozilla.firefox", title: "x") == nil)
     }
 

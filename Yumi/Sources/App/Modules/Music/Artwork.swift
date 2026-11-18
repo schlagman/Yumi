@@ -13,7 +13,8 @@ enum MusicArtwork {
         let name: String
         switch id {
         case "com.apple.Safari": name = "name"
-        case "com.google.Chrome", "com.microsoft.edgemac", "com.brave.Browser", "company.thebrowser.Browser", "com.vivaldi.Vivaldi":
+        case "com.google.Chrome", "com.microsoft.edgemac", "com.brave.Browser", "company.thebrowser.Browser", "company.thebrowser.dia",
+             "com.vivaldi.Vivaldi":
             name = "title"
         default: return nil
         }

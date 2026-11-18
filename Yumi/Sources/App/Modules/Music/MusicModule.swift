@@ -105,7 +105,7 @@ final class MusicModule: YumiModule {
             let name = app.localizedName ?? ""
             let id = app.bundleIdentifier ?? ""
             let browser = ["com.google.Chrome", "com.microsoft.edgemac", "com.brave.Browser", "org.mozilla.firefox", "company.thebrowser.Browser",
-                           "com.apple.Safari", "com.operasoftware.Opera", "com.vivaldi.Vivaldi"].contains(id)
+                           "company.thebrowser.dia", "com.apple.Safari", "com.operasoftware.Opera", "com.vivaldi.Vivaldi"].contains(id)
             guard browser || id == MusicPlayer.deezer.rawValue || id.hasPrefix("com.google.Chrome.app.")
                     || name.localizedCaseInsensitiveContains("Deezer") || name.localizedCaseInsensitiveContains("YouTube Music") else { continue }
             let titles = Self.windowTitles(of: app.processIdentifier)
