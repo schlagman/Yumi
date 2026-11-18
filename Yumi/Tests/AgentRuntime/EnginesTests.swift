@@ -70,12 +70,14 @@ private func providers(answering text: String, wire: Wire) -> [any LLMProvider] 
         let wire = Wire()
         let provider = OpenAILLMProvider(model: OpenAILLMProvider.groqModel, apiKey: { "gsk-groq" },
                                          transport: reply(200, openAIAnswer("{}"), wire: wire),
-                                         endpoint: OpenAILLMProvider.groqEndpoint, label: "groq")
+                                         endpoint: OpenAILLMProvider.groqEndpoint, label: "groq", reasoningRoom: 2048)
         #expect(try await provider.complete(request).text == "{}")
         let sent = try #require(wire.last)
         #expect(sent.url?.absoluteString == "https://api.groq.com/openai/v1/chat/completions")
         #expect(sent.value(forHTTPHeaderField: "authorization") == "Bearer gsk-groq")
         #expect(wire.body?["model"] as? String == "llama-3.3-70b-versatile")
+        // The request's 500 tokens, plus room for a model that thinks first
+        #expect(wire.body?["max_completion_tokens"] as? Int == 2548)
         #expect(provider.name == "groq:llama-3.3-70b-versatile")
         #expect(Engine.groq.keychainKey == "groq-api-key" && Engine.groq.defaultModel == OpenAILLMProvider.groqModel)
     }

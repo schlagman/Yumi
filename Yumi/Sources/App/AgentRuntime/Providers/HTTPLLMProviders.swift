@@ -66,6 +66,9 @@ struct OpenAILLMProvider: LLMProvider {
     var endpoint: URL = OpenAILLMProvider.endpoint
     /// Who answers, in `name`: "openai" or "groq".
     var label = "openai"
+    /// Tokens added to each request's limit for a model that reasons before it answers (gpt-oss on
+    /// Groq): its thinking counts in the limit, and a short limit leaves the answer empty.
+    var reasoningRoom = 0
 
     var name: String { "\(label):\(model)" }
 
@@ -84,7 +87,7 @@ struct OpenAILLMProvider: LLMProvider {
         let messages = [Body.Message(role: "system", content: request.system)]
             + request.messages.map { Body.Message(role: $0.role.rawValue, content: $0.content) }
         urlRequest.httpBody = try JSONEncoder().encode(Body(
-            model: model, messages: messages, max_completion_tokens: request.maxOutputTokens,
+            model: model, messages: messages, max_completion_tokens: request.maxOutputTokens + reasoningRoom,
             response_format: request.expectsJSON ? .init(type: "json_object") : nil))
         return urlRequest
     }

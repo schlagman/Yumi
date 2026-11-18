@@ -18,7 +18,7 @@ enum EngineFactory {
             return OpenAILLMProvider(model: settings.model(.openai) ?? OpenAILLMProvider.defaultModel, apiKey: key(.openai))
         case .groq:
             return OpenAILLMProvider(model: settings.model(.groq) ?? OpenAILLMProvider.groqModel, apiKey: key(.groq),
-                                     endpoint: OpenAILLMProvider.groqEndpoint, label: "groq")
+                                     endpoint: OpenAILLMProvider.groqEndpoint, label: "groq", reasoningRoom: 2048)
         case .gemini:
             return GeminiLLMProvider(model: settings.model(.gemini) ?? GeminiLLMProvider.defaultModel, apiKey: key(.gemini),
                                      remember: { model in
