@@ -57,3 +57,23 @@ jobs:
             build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO
+
+      # This fork installs Yumi from here: a Release build, unsigned (it is signed on the Mac
+      # that installs it), kept as a downloadable artifact. Same job, so one runner is enough.
+      - name: Build the app to install
+        run: |
+          xcodebuild \
+            -project Yumi/Yumi.xcodeproj \
+            -scheme Yumi \
+            -configuration Release \
+            -derivedDataPath build \
+            build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+          ditto -c -k --keepParent build/Build/Products/Release/Yumi.app Yumi.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Yumi
+          path: Yumi.zip
+          retention-days: 7
