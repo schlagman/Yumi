@@ -14,13 +14,22 @@ final class NotesModule: YumiModule {
     private var onChange: (@MainActor () -> Void)?
     private var storeObserver: NSObjectProtocol?
     private var refreshing: Task<Void, Never>?
+    /// Google Keep's credentials, once connected in the settings (read from the Keychain by the app).
+    private let keep: @MainActor () -> GoogleKeep.Credentials?
+    /// Why the last note did not reach Keep; nil once one does.
+    private var keepProblem: String?
 
-    init(store: NotesStore = NotesStore(fileURL: AppIdentity.supportDirectory.appendingPathComponent("notes.txt"))) {
+    init(store: NotesStore = NotesStore(fileURL: AppIdentity.supportDirectory.appendingPathComponent("notes.txt")),
+         keep: @escaping @MainActor () -> GoogleKeep.Credentials? = { nil }) {
         self.store = store
+        self.keep = keep
     }
 
     var snapshot: ModuleSnapshot {
-        NotesSummary.snapshot(notes: notes, reminders: reminders, remindersAccess: access, now: Date())
+        var snapshot = NotesSummary.snapshot(notes: notes, reminders: reminders, remindersAccess: access, now: Date())
+        // A note Keep did not take stays here, and the island says so (unless a reminder has the stage)
+        if let keepProblem, reminders.isEmpty { snapshot.subtitle = keepProblem }
+        return snapshot
     }
 
     /// On, but macOS does not let Yumi read the reminders.
@@ -82,18 +91,38 @@ final class NotesModule: YumiModule {
                 complete(featured)
             } else if let text = NSPasteboard.general.string(forType: .string), store.add(text) != nil {
                 notes = store.load()
+                sendToKeep(text)
             }
         case .secondary:
             if access == .notDetermined {
                 requestAccess()
             } else if featured != nil {
                 openReminders()
+            } else if keep() != nil {
+                NSWorkspace.shared.open(GoogleKeep.webURL)
             } else {
                 store.ensureFileExists()
                 NSWorkspace.shared.open(store.fileURL)
             }
         case .previous:
             break
+        }
+    }
+
+    /// The note goes to Google Keep whole (the file keeps one capped line), once Keep is connected.
+    private func sendToKeep(_ text: String) {
+        guard let credentials = keep() else { return }
+        let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task { [weak self] in
+            do {
+                try await GoogleKeep.add(note, with: credentials)
+                self?.keepProblem = nil
+            } catch {
+                let why: String
+                if case GoogleKeep.Failure.refused(let word)? = error as? GoogleKeep.Failure { why = word } else { why = loc("pas de réponse") }
+                self?.keepProblem = loc("Gardée ici, Google Keep ne l'a pas prise (\(why)).")
+            }
+            self?.onChange?()
         }
     }
 

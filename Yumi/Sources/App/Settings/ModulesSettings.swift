@@ -66,6 +66,8 @@ struct ModulesSettings: View {
                 .id("module-settings-screen-time")
             MusicSettingsSection()
                 .id("module-settings-music")
+            GoogleKeepSection()
+                .id("module-settings-notes")
         }
         }
     }
@@ -259,6 +261,61 @@ private struct MusicSettingsSection: View {
             Text("Musique")
         } footer: {
             SettingsHelp(loc("Les paroles synchronisées viennent de LRCLIB (lrclib.net), gratuit et sans compte : je ne lui envoie que le titre et l'artiste du morceau. Musique et Spotify disent où en est le morceau ; pour YouTube et YouTube Music, je compte depuis le début du morceau, les paroles peuvent avoir un peu d'avance ou de retard. Dès le prochain morceau."))
+        }
+    }
+}
+
+/// Notes: Google Keep, on a work account whose administrator allowed Yumi's OAuth client.
+private struct GoogleKeepSection: View {
+    @State private var clientID = KeychainStore.shared.get(GoogleKeep.clientIDKey) ?? ""
+    @State private var secret = KeychainStore.shared.get(GoogleKeep.clientSecretKey) ?? ""
+    @State private var connected = KeychainStore.shared.get(GoogleKeep.refreshTokenKey)?.isEmpty == false
+    @State private var waiting = false
+    @State private var status: String?
+
+    var body: some View {
+        Section {
+            if connected {
+                LabeledContent("Google Keep") { Text(loc("Connecté")).foregroundStyle(.secondary) }
+                Button(loc("Se déconnecter")) {
+                    KeychainStore.shared.remove(GoogleKeep.refreshTokenKey)
+                    connected = false
+                }
+            } else {
+                TextField(loc("ID client OAuth"), text: $clientID)
+                SecureField(loc("Code secret du client"), text: $secret)
+                HStack {
+                    Button(waiting ? loc("En attente du navigateur…") : loc("Se connecter à Google")) { connect() }
+                        .disabled(waiting || clientID.nonEmptyTrimmed == nil || secret.nonEmptyTrimmed == nil)
+                    if let status { Text(status).foregroundStyle(.secondary).lineLimit(2) }
+                }
+            }
+        } header: {
+            Text("Google Keep")
+        } footer: {
+            SettingsHelp(loc("Chaque note que tu gardes avec Yumi part aussi dans ton Google Keep, et « Tout voir » l'ouvre. Il faut un compte Google Workspace dont l'administrateur a autorisé ce client OAuth (délégation au niveau du domaine, accès à Keep) : l'ID et le code secret viennent de lui et restent dans le trousseau du Mac."))
+        }
+    }
+
+    private func connect() {
+        let id = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        KeychainStore.shared.set(GoogleKeep.clientIDKey, value: id)
+        KeychainStore.shared.set(GoogleKeep.clientSecretKey, value: key)
+        waiting = true
+        status = nil
+        Task {
+            do {
+                KeychainStore.shared.set(GoogleKeep.refreshTokenKey, value: try await GoogleKeep.signIn(clientID: id, clientSecret: key))
+                connected = true
+            } catch GoogleKeep.Failure.refused(let word) {
+                status = loc("Refusé par Google : \(word).")
+            } catch GoogleKeep.Failure.timedOut {
+                status = loc("Pas de retour du navigateur.")
+            } catch {
+                status = loc("La connexion n'a pas abouti.")
+            }
+            waiting = false
         }
     }
 }
