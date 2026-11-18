@@ -1647,6 +1647,16 @@
         }
       }
     },
+    "Afficher les paroles": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show lyrics"
+          }
+        }
+      }
+    },
     "Agenda": {
       "localizations": {
         "en": {
@@ -4393,6 +4403,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "I fold away after"
+          }
+        }
+      }
+    },
+    "Les paroles synchronisées viennent de LRCLIB (lrclib.net), gratuit et sans compte : je ne lui envoie que le titre et l'artiste du morceau. Musique et Spotify disent où en est le morceau ; pour YouTube et YouTube Music, je compte depuis le début du morceau, les paroles peuvent avoir un peu d'avance ou de retard. Dès le prochain morceau.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synced lyrics come from LRCLIB (lrclib.net), free and without an account: I only send it the title and the artist of the track. Music and Spotify say where the track is; for YouTube and YouTube Music, I count from the start of the track, so the lyrics may run a little early or late. From the next track on."
           }
         }
       }

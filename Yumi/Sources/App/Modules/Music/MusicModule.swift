@@ -25,11 +25,15 @@ final class MusicModule: YumiModule {
     private var clock: PlaybackClock?
     private var ticking: Task<Void, Never>?
 
+    /// The cover and the synced lyrics of the current track, once they arrived.
+    private var artwork: Data?
+    private var lyrics: [Lyrics.Line] = []
+
     var snapshot: ModuleSnapshot {
         let now = Date()
         return MusicSummary.snapshot(playing, canControl: Self.canControl,
                                      pausedFor: pausedAt.map { now.timeIntervalSince($0) },
-                                     position: clock?.position(at: now))
+                                     position: clock?.position(at: now), artwork: artwork, lyrics: lyrics)
     }
 
     // MARK: Lifecycle
@@ -69,6 +73,8 @@ final class MusicModule: YumiModule {
     private var heardBrowsers: Set<String> = []
     /// The browser of the page shown as `.web`, to bring it forward.
     private var webBrowser: String?
+    /// The app each player was read in at the last look (a browser, Deezer), to ask it for the cover.
+    private var titledIn: [MusicPlayer: String] = [:]
 
     #if !APPSTORE
     /// Every three seconds, the titles of the windows of Deezer, YouTube Music and the browsers:
@@ -89,6 +95,7 @@ final class MusicModule: YumiModule {
     private func lookAtTitles() {
         guard AXIsProcessTrusted() else { return }
         var found: [MusicPlayer: NowPlaying] = [:]
+        var foundIn: [MusicPlayer: String] = [:]
         // Asked once per look, and only when a title names a track
         var audible: Set<String>??
         let now = Date()
@@ -114,6 +121,7 @@ final class MusicModule: YumiModule {
                 guard let isPlaying = TitlePlayback.isPlaying(title: track.title, previous: titled[track.player],
                                                               audible: sound, pressedRecently: pressed) else { continue }
                 found[track.player] = NowPlaying(player: track.player, title: track.title, artist: track.artist, album: "", isPlaying: isPlaying)
+                foundIn[track.player] = id
             }
             if browser, !knownSite, BrowserFallback.canTellItsSound(id) { unknowns.append((id, name, titles)) }
         }
@@ -137,6 +145,7 @@ final class MusicModule: YumiModule {
             }
         }
         heardBrowsers = heard
+        titledIn = foundIn
         for player in Set(titled.keys).subtracting(found.keys) { receive(.stopped(player)) }
         for (_, track) in found where titled[track.player] != track { receive(.track(track)) }
         titled = found
@@ -176,6 +185,9 @@ final class MusicModule: YumiModule {
         pressedAt = [:]
         heardBrowsers = []
         webBrowser = nil
+        titledIn = [:]
+        artwork = nil
+        lyrics = []
         playing = nil
         pausedAt = nil
         lingering?.cancel()
@@ -189,16 +201,77 @@ final class MusicModule: YumiModule {
         let next = MusicSummary.apply(update, to: playing)
         guard next != playing, onChange != nil else { return }
         let wasPaused = playing.map { !$0.isPlaying } ?? false
+        let newTrack = !(next.map { new in playing?.isSameTrack(as: new) ?? false } ?? false)
         clock = PlaybackClock.next(clock, from: playing, to: next, now: Date())
         playing = next
+        if newTrack { trackChanged() }
         notePause(wasPaused: wasPaused)
         syncTicking()
         onChange?()
     }
 
-    /// The playback bar moves every second, but only while a track with a known position plays.
+    /// Another track, or none: its cover and its lyrics are asked again.
+    private func trackChanged() {
+        artwork = nil
+        lyrics = []
+        guard let playing else { return }
+        #if !APPSTORE
+        fetchArtwork(playing)
+        #endif
+        fetchLyrics(playing)
+    }
+
+    /// The synced lyrics of `track` from LRCLIB, when the user turned them on. A YouTube video is
+    /// looked up only when its title names an artist; a page that is not a known site never is.
+    private func fetchLyrics(_ track: NowPlaying) {
+        guard UserDefaults.standard.bool(forKey: Lyrics.enabledKey), track.player != .web,
+              let song = track.artist.isEmpty ? Lyrics.song(inVideoTitle: track.title) : (title: track.title, artist: track.artist)
+        else { return }
+        Task { [weak self] in
+            let lines = await Lyrics.fetch(title: song.title, artist: song.artist, duration: track.duration)
+            // Arrived after the track changed: not this one's
+            guard let self, !lines.isEmpty, self.playing?.isSameTrack(as: track) == true else { return }
+            self.lyrics = lines
+            self.syncTicking()
+            self.onChange?()
+        }
+    }
+
+    #if !APPSTORE
+    /// The cover of `track`: the picture itself from Music, its address from Spotify, the video's
+    /// thumbnail for YouTube and YouTube Music (from the address of their tab). Asking the app may
+    /// show the system's Automation dialog once.
+    private func fetchArtwork(_ track: NowPlaying) {
+        let script: String
+        switch track.player {
+        case .music:   script = "tell application id \"com.apple.Music\" to get raw data of artwork 1 of current track"
+        case .spotify: script = "tell application id \"com.spotify.client\" to get artwork url of current track"
+        case .youtube, .youtubeMusic:
+            guard let browser = titledIn[track.player], let tab = MusicArtwork.tabScript(browser: browser, title: track.title) else { return }
+            script = tab
+        default: return
+        }
+        PlayerScripting.run(script, on: track.player, askingFirst: true) { [weak self] result in
+            guard case .success(let answer) = result else { return }
+            Task { @MainActor in
+                var picture = answer.data
+                if track.player != .music {
+                    guard let url = MusicArtwork.imageURL(from: answer.text, player: track.player),
+                          let download = try? await URLSession.shared.data(from: url) else { return }
+                    picture = download.0
+                }
+                guard let self, self.playing?.isSameTrack(as: track) == true, let small = MusicArtwork.thumbnail(picture) else { return }
+                self.artwork = small
+                self.onChange?()
+            }
+        }
+    }
+    #endif
+
+    /// The playback bar moves every second while a track with a known position plays, and so do
+    /// the lyrics: for a player read from its title, from the moment Yumi saw the track start.
     private func syncTicking() {
-        if clock?.isRunning == true, playing?.duration != nil, onChange != nil {
+        if clock?.isRunning == true, playing?.duration != nil || !lyrics.isEmpty, onChange != nil {
             guard ticking == nil else { return }
             ticking = Task { [weak self] in
                 while !Task.isCancelled {
@@ -308,8 +381,8 @@ final class MusicModule: YumiModule {
         end tell
         """
         PlayerScripting.run(script, on: player, askingFirst: false) { [weak self] result in
-            guard case .success(let text) = result else { return }
-            let update = MusicSummary.update(fromScriptResult: text, player: player)
+            guard case .success(let answer) = result else { return }
+            let update = MusicSummary.update(fromScriptResult: answer.text, player: player)
             Task { @MainActor in
                 // Only a track that is playing is news: a stopped player says nothing, and a track
                 // found paused was paused at an unknown time, not just now.
@@ -329,10 +402,16 @@ private enum PlayerScripting {
     /// AppleScript error for a refused Automation permission.
     private static let notAuthorized = -1743
 
+    /// What a script answered: as text, and as raw bytes (a picture).
+    struct Answer: Sendable {
+        var text: String
+        var data: Data
+    }
+
     /// - Parameter askingFirst: false to give up silently when the permission was never granted,
     ///   instead of showing the system dialog.
     static func run(_ source: String, on player: MusicPlayer, askingFirst: Bool,
-                    completion: @escaping @Sendable (Result<String, Failure>) -> Void) {
+                    completion: @escaping @Sendable (Result<Answer, Failure>) -> Void) {
         let allowedKey = "playerAllowed.\(player.rawValue)"
         // The system can tell whether the permission was granted (AEDeterminePermissionToAutomateTarget),
         // but that call sometimes never returns, and it held every later pause and next behind it
@@ -350,7 +429,7 @@ private enum PlayerScripting {
                 completion(.failure(code == notAuthorized ? .notAllowed : .failed))
             } else {
                 UserDefaults.standard.set(true, forKey: allowedKey)
-                completion(.success(output?.stringValue ?? ""))
+                completion(.success(Answer(text: output?.stringValue ?? "", data: output?.data ?? Data())))
             }
         }
     }

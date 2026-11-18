@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // What each module shows in its tile of the bento: real elements at a glance (the contribution
@@ -172,14 +173,24 @@ private struct MusicTile: View {
                                           center: .center))
                     .frame(width: large ? 54 : 40, height: large ? 54 : 40)
                     .overlay {
-                        if playing { WaveBars(color: .white) } else {
+                        if let cover = module.artwork.flatMap(NSImage.init(data:)) {
+                            Image(nsImage: cover).resizable().aspectRatio(contentMode: .fill)
+                        } else if playing { WaveBars(color: .white) } else {
                             Image(systemName: "music.note").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                         }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .shadow(color: Color(hex: "#F58AD9").opacity(0.3), radius: 8, y: 3)
                 VStack(alignment: .leading, spacing: 2) {
                     Headline(text: module.title, size: large ? 14 : 12.5)
                     Faint(text: module.subtitle)
+                }
+            }
+            // Only the large tile has room for the lyrics
+            if large, let line = module.lyrics.first {
+                VStack(alignment: .leading, spacing: 2) {
+                    Headline(text: line, size: 13)
+                    if module.lyrics.count > 1 { Faint(text: module.lyrics[1]) }
                 }
             }
             if let progress = module.progress {

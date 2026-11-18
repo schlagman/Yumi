@@ -342,14 +342,19 @@ enum MusicSummary {
     ///   - canControl: false in builds that may not send commands to other apps.
     ///   - pausedFor: seconds since the track was paused, when it is.
     ///   - position: seconds into the track, when it is known.
+    ///   - artwork: the cover of the track, small.
+    ///   - lyrics: its synced lyrics, shown only with a known position.
     static func snapshot(_ playing: NowPlaying?, canControl: Bool, pausedFor: TimeInterval? = nil,
-                         position: TimeInterval? = nil) -> ModuleSnapshot {
+                         position: TimeInterval? = nil, artwork: Data? = nil, lyrics: [Lyrics.Line] = []) -> ModuleSnapshot {
         var snapshot = plainSnapshot(playing, canControl: canControl, pausedFor: pausedFor).withSymbols("music.note")
+        guard playing != nil else { return snapshot }
         if let duration = playing?.duration, duration > 0, let position {
             let at = min(duration, max(0, position))
             snapshot.progress = ModuleProgress(fraction: at / duration, leading: FrenchText.trackTime(at),
                                                trailing: FrenchText.trackTime(duration))
         }
+        snapshot.artwork = artwork
+        if let position { snapshot.lyrics = Lyrics.around(position, in: lyrics) }
         return snapshot
     }
 

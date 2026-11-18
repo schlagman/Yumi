@@ -64,6 +64,8 @@ struct ModulesSettings: View {
                 .id("module-settings-agenda")
             ScreenTimeSettingsSection()
                 .id("module-settings-screen-time")
+            MusicSettingsSection()
+                .id("module-settings-music")
         }
         }
     }
@@ -242,6 +244,21 @@ private struct ContributionsSection: View {
             Text("Contributions")
         } footer: {
             SettingsHelp(loc("Comme sur ton profil GitHub. Je les relis au plus toutes les trente minutes."))
+        }
+    }
+}
+
+/// Music: the lyrics, asked to LRCLIB only once turned on.
+private struct MusicSettingsSection: View {
+    @AppStorage(Lyrics.enabledKey) private var lyrics = false
+
+    var body: some View {
+        Section {
+            Toggle(loc("Afficher les paroles"), isOn: $lyrics)
+        } header: {
+            Text("Musique")
+        } footer: {
+            SettingsHelp(loc("Les paroles synchronisées viennent de LRCLIB (lrclib.net), gratuit et sans compte : je ne lui envoie que le titre et l'artiste du morceau. Musique et Spotify disent où en est le morceau ; pour YouTube et YouTube Music, je compte depuis le début du morceau, les paroles peuvent avoir un peu d'avance ou de retard. Dès le prochain morceau."))
         }
     }
 }
