@@ -7,6 +7,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var statusItem: NSStatusItem?
     private(set) var islandController: IslandWindowController?
     private var core: YumiCore?
+    #if !APPSTORE
+    private let lockScreenMusic = LockScreenMusic()
+    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Ignore SIGPIPE — prevents crash when the hook script closes socket before we write response
@@ -134,6 +137,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             core.start()
             self.core = core
         }
+        #if !APPSTORE
+        if plan.modules { lockScreenMusic.start() }
+        #endif
         #if DEBUG
         if plan.chat { sendDevelopmentChatPrompts() }
         #endif
