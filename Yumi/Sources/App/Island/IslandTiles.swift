@@ -166,6 +166,31 @@ private struct MusicTile: View {
     private var playing: Bool { module.live.map { $0.priority >= ModuleLivePriority.activity } ?? false }
 
     var body: some View {
+        if large, !module.lyrics.isEmpty {
+            // Alone in its tab, the tile is wide enough for the lyrics beside the player
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 16) {
+                    player(lyrics: 0).frame(width: 210)
+                    lyrics(module.lyrics)
+                        .frame(minWidth: 0, idealWidth: 180, maxWidth: .infinity, alignment: .leading)
+                }
+                player(lyrics: 2)
+            }
+        } else {
+            player(lyrics: large ? 2 : 0)
+        }
+    }
+
+    /// The line sung now, then the next ones, fainter.
+    private func lyrics(_ lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Headline(text: lines[0], size: 13, lines: 2)
+            ForEach(Array(lines.dropFirst().enumerated()), id: \.offset) { Faint(text: $0.element) }
+        }
+    }
+
+    /// The cover and the titles, `count` lines of lyrics under them, the bar and the buttons.
+    private func player(lyrics count: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -186,12 +211,8 @@ private struct MusicTile: View {
                     Faint(text: module.subtitle)
                 }
             }
-            // Only the large tile has room for the lyrics
-            if large, let line = module.lyrics.first {
-                VStack(alignment: .leading, spacing: 2) {
-                    Headline(text: line, size: 13)
-                    if module.lyrics.count > 1 { Faint(text: module.lyrics[1]) }
-                }
+            if count > 0, !module.lyrics.isEmpty {
+                lyrics(Array(module.lyrics.prefix(count)))
             }
             if let progress = module.progress {
                 ProgressLine(fraction: progress.fraction, color: .white)

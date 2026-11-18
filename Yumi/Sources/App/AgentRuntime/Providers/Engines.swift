@@ -6,7 +6,7 @@ import Foundation
 enum Engine: String, CaseIterable, Codable, Sendable {
     /// The order is the automatic one: what the person set up first, then Apple's model when this
     /// Mac has it, then the simple mode, which is always there.
-    case claudeCode, anthropic, openai, gemini, ollama, apple, simple
+    case claudeCode, anthropic, openai, groq, gemini, ollama, apple, simple
 
     var label: String {
         switch self {
@@ -15,6 +15,7 @@ enum Engine: String, CaseIterable, Codable, Sendable {
         case .claudeCode: "Claude Code"
         case .anthropic: loc("Anthropic (clé API)")
         case .openai: loc("OpenAI (clé API)")
+        case .groq: loc("Groq (clé API)")
         case .gemini: loc("Google Gemini (clé API)")
         case .ollama: loc("Ollama (sur ce Mac)")
         }
@@ -25,6 +26,7 @@ enum Engine: String, CaseIterable, Codable, Sendable {
         switch self {
         case .anthropic: "anthropic-api-key"
         case .openai: "openai-api-key"
+        case .groq: "groq-api-key"
         case .gemini: "gemini-api-key"
         case .claudeCode, .ollama, .apple, .simple: nil
         }
@@ -35,6 +37,7 @@ enum Engine: String, CaseIterable, Codable, Sendable {
         switch self {
         case .claudeCode, .anthropic: "Claude"
         case .openai: "OpenAI"
+        case .groq: "Groq"
         case .gemini: "Gemini"
         case .ollama: "Ollama"
         case .apple: "Apple"
@@ -53,6 +56,7 @@ enum Engine: String, CaseIterable, Codable, Sendable {
         switch self {
         case .anthropic: "claude-sonnet-4-6"
         case .openai: OpenAILLMProvider.defaultModel
+        case .groq: OpenAILLMProvider.groqModel
         case .gemini: GeminiLLMProvider.defaultModel
         case .claudeCode, .ollama, .apple, .simple: nil
         }
@@ -64,6 +68,7 @@ enum Engine: String, CaseIterable, Codable, Sendable {
         case .claudeCode: loc("Tes messages et les demandes de plan partent chez Anthropic par ton Claude Code, sous ton compte (abonnement ou facturation de ce compte).")
         case .anthropic: loc("Tes messages et les demandes de plan partent chez Anthropic. Facturé par Anthropic à l'usage.")
         case .openai: loc("Tes messages et les demandes de plan partent chez OpenAI. Facturé par OpenAI à l'usage.")
+        case .groq: loc("Tes messages et les demandes de plan partent chez Groq. Le palier gratuit suffit pour essayer ; au-delà, facturé par Groq à l'usage.")
         case .gemini: loc("Tes messages et les demandes de plan partent chez Google. Le palier gratuit suffit pour essayer ; au-delà, facturé par Google.")
         case .ollama: loc("Rien ne quitte ton Mac : le modèle tourne en local. Gratuit.")
         case .apple: loc("Le modèle d'Apple tourne sur ton Mac : rien ne part ailleurs, sans compte, gratuit. Il est fait pour des demandes simples.")
@@ -166,7 +171,7 @@ enum EngineDetector {
             return claudeCodeInstalled
                 ? EngineStatus(engine: engine, ready: true, detail: loc("Installé. La connexion se vérifie avec « Tester »."))
                 : EngineStatus(engine: engine, ready: false, detail: loc("Pas installé."))
-        case .anthropic, .openai, .gemini:
+        case .anthropic, .openai, .groq, .gemini:
             return hasKey(engine)
                 ? EngineStatus(engine: engine, ready: true, detail: loc("Clé enregistrée."))
                 : EngineStatus(engine: engine, ready: false, detail: loc("Pas de clé."))

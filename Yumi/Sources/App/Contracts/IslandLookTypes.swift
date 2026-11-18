@@ -113,6 +113,7 @@ enum IslandOpenWidth: Equatable, Sendable {
         case .tab(.work):  return 640
         case .tab(.day):   return 560
         case .tab(.relax): return 540
+        case .tab(.focus): return 540
         case .chat:        return 580
         case .alert:       return 680
         case .settings:    return 620
@@ -122,9 +123,12 @@ enum IslandOpenWidth: Equatable, Sendable {
     /// What the menu bar row needs on each side of the notch: the three tabs on the left,
     /// the status and two buttons on the right.
     static let side: CGFloat = 196
+    /// What one more tab takes in that row ("Focus" and its padding).
+    static let extraTab: CGFloat = 60
 
-    /// The width, in content units. `notch` is the notch's width in content units, 0 without one.
-    func width(notch: CGFloat) -> CGFloat {
-        max(preferred, notch + 2 * Self.side)
+    /// The width, in content units. `notch` is the notch's width in content units, 0 without one;
+    /// `tabs` the number of tabs in the row, so that none hides behind the notch.
+    func width(notch: CGFloat, tabs: Int = 3) -> CGFloat {
+        max(preferred, notch + 2 * (Self.side + CGFloat(max(0, tabs - 3)) * Self.extraTab))
     }
 }

@@ -17,11 +17,11 @@ import UniformTypeIdentifiers
     }
 
     @Test func showsTheLineSungAndTheNext() {
-        let lines = Lyrics.parse("[00:10.00]Un\n[00:20.00]\n[00:30.00]Trois")
+        let lines = Lyrics.parse("[00:10.00]Un\n[00:20.00]\n[00:30.00]Trois\n[00:40.00]Quatre\n[00:50.00]Cinq")
         #expect(Lyrics.around(5, in: lines).isEmpty)
-        #expect(Lyrics.around(10, in: lines) == ["Un", "♪"])
-        #expect(Lyrics.around(25, in: lines) == ["♪", "Trois"])
-        #expect(Lyrics.around(99, in: lines) == ["Trois"])
+        #expect(Lyrics.around(10, in: lines) == ["Un", "♪", "Trois", "Quatre"])
+        #expect(Lyrics.around(25, in: lines) == ["♪", "Trois", "Quatre", "Cinq"])
+        #expect(Lyrics.around(99, in: lines) == ["Cinq"])
     }
 
     @Test func picksAResultOfTheSameLength() throws {

@@ -3751,6 +3751,16 @@
         }
       }
     },
+    "Focus": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Focus"
+          }
+        }
+      }
+    },
     "Focus en cours": {
       "localizations": {
         "en": {
@@ -3817,6 +3827,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Google Gemini (API key)"
+          }
+        }
+      }
+    },
+    "Groq (clé API)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groq (API key)"
           }
         }
       }
@@ -4443,6 +4463,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Chatty"
+          }
+        }
+      }
+    },
+    "Tes messages et les demandes de plan partent chez Groq. Le palier gratuit suffit pour essayer ; au-delà, facturé par Groq à l'usage.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your messages and plan requests go to Groq. The free tier is enough to try; beyond it, billed by Groq per use."
           }
         }
       }

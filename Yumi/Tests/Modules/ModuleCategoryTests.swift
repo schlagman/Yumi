@@ -30,7 +30,8 @@ private final class FiledModule: YumiModule {
     @Test func eachModuleOfThisBuildHasItsTab() {
         #expect(["claude-code", "github", "notion"].allSatisfy { ModuleCategory.of(moduleID: $0) == .work })
         #expect(["agenda", "weather", "notes"].allSatisfy { ModuleCategory.of(moduleID: $0) == .day })
-        #expect(["music", "focus"].allSatisfy { ModuleCategory.of(moduleID: $0) == .relax })
+        #expect(ModuleCategory.of(moduleID: "music") == .relax)
+        #expect(ModuleCategory.of(moduleID: "focus") == .focus)
     }
 
     @Test func anUnknownModuleStillFindsATab() {
@@ -40,7 +41,8 @@ private final class FiledModule: YumiModule {
     @Test func aTabKeepsThePersonsOrder() {
         let ids = ["focus", "notes", "github", "music", "claude-code", "agenda"]
         #expect(ModuleCategory.ids(ids, in: .work) == ["github", "claude-code"])
-        #expect(ModuleCategory.ids(ids, in: .relax) == ["focus", "music"])
+        #expect(ModuleCategory.ids(ids, in: .relax) == ["music"])
+        #expect(ModuleCategory.ids(ids, in: .focus) == ["focus"])
         #expect(ModuleCategory.present(in: ["music", "github"]) == [.work, .relax])
     }
 
@@ -67,7 +69,8 @@ private final class FiledModule: YumiModule {
         let lineup = ModuleLineup()
         registry.share(with: lineup)
 
-        #expect(lineup.selected(in: .relax).map(\.id) == ["focus", "music"])
+        #expect(lineup.selected(in: .relax).map(\.id) == ["music"])
+        #expect(lineup.selected(in: .focus).map(\.id) == ["focus"])
         #expect(lineup.selected(in: .work).map(\.id) == ["github"])
         #expect(lineup.selected(in: .day).isEmpty)
     }

@@ -77,10 +77,10 @@ enum Lyrics {
         return (song, artist)
     }
 
-    /// The line sung at `position` and the next one. Empty before the first line; a pause in
-    /// the singing shows as a note.
+    /// The line sung at `position` and the next three: the wide tile shows them all, the narrow
+    /// one the first two. Empty before the first line; a pause in the singing shows as a note.
     static func around(_ position: TimeInterval, in lines: [Line]) -> [String] {
         guard let index = lines.lastIndex(where: { $0.time <= position }) else { return [] }
-        return lines[index...].prefix(2).map { $0.text.isEmpty ? "♪" : $0.text }
+        return lines[index...].prefix(4).map { $0.text.isEmpty ? "♪" : $0.text }
     }
 }

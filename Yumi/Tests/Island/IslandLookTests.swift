@@ -30,6 +30,8 @@ import Foundation
         }
         // The widest tab is not stretched by a notch it already clears
         #expect(IslandOpenWidth.tab(.work).width(notch: 160) == IslandOpenWidth.tab(.work).preferred)
+        // A fourth tab widens the row on both sides of the notch
+        #expect(IslandOpenWidth.tab(.focus).width(notch: 200, tabs: 4) == 200 + 2 * (IslandOpenWidth.side + IslandOpenWidth.extraTab))
     }
 
     // MARK: Colour

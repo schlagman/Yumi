@@ -37,7 +37,7 @@ struct ModuleSnapshot: Identifiable, Equatable, Sendable {
     var progress: ModuleProgress? = nil
     /// A small picture the tile can show in place of its icon: the cover of a track. nil without one.
     var artwork: Data? = nil
-    /// Lyrics of the track playing: the line sung now, then the next one. Empty for most modules.
+    /// Lyrics of the track playing: the line sung now, then the next ones. Empty for most modules.
     var lyrics: [String] = []
     /// Lines the activity view lists under the headline: one Claude Code session each, one pull
     /// request or one GitHub event each. Already in the order to show. Empty for most modules.

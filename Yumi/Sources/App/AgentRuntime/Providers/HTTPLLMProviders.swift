@@ -50,17 +50,24 @@ enum HTTPProviderSupport {
     }
 }
 
-/// OpenAI's Chat Completions API. Billed by OpenAI per use.
+/// OpenAI's Chat Completions API. Billed by OpenAI per use. Groq answers the same API at its own
+/// address, with its own models.
 struct OpenAILLMProvider: LLMProvider {
     static let endpoint = URL(string: "https://api.openai.com/v1/chat/completions")!
     static let defaultModel = "gpt-4o-mini"
+    static let groqEndpoint = URL(string: "https://api.groq.com/openai/v1/chat/completions")!
+    /// A production model of Groq that keeps to JSON when asked.
+    static let groqModel = "llama-3.3-70b-versatile"
 
     var model: String = OpenAILLMProvider.defaultModel
     var apiKey: @Sendable () -> String?
     var timeout: TimeInterval = 60
     var transport: HTTPTransport = HTTPProviderSupport.session
+    var endpoint: URL = OpenAILLMProvider.endpoint
+    /// Who answers, in `name`: "openai" or "groq".
+    var label = "openai"
 
-    var name: String { "openai:\(model)" }
+    var name: String { "\(label):\(model)" }
 
     func complete(_ request: LLMRequest) async throws -> LLMResponse {
         guard let key = apiKey()?.nonEmptyTrimmed else { throw LLMProviderError.unavailable }
@@ -70,7 +77,7 @@ struct OpenAILLMProvider: LLMProvider {
     }
 
     func urlRequest(for request: LLMRequest, key: String) throws -> URLRequest {
-        var urlRequest = URLRequest(url: Self.endpoint, timeoutInterval: timeout)
+        var urlRequest = URLRequest(url: endpoint, timeoutInterval: timeout)
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "content-type")
         urlRequest.setValue("Bearer \(key)", forHTTPHeaderField: "authorization")

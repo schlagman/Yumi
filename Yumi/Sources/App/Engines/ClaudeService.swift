@@ -215,7 +215,7 @@ final class ClaudeService {
             case .simple:
                 await answerSimply(state: state)
                 return
-            case .openai, .gemini, .ollama, .apple:
+            case .openai, .groq, .gemini, .ollama, .apple:
                 if let provider = EngineFactory.provider(engine, settings),
                    await chatWithProvider(provider, engine: engine, query: query, context: context, state: state) {
                     return
