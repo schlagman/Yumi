@@ -1,68 +1,76 @@
-import AppKit
-import CryptoKit
 import Foundation
-import Network
+import Security
 
-/// Google Keep, on a Google Workspace account whose administrator allowed Yumi's OAuth client
-/// (domain-wide delegation, scope keep): Yumi creates the notes there. The client ID and secret
-/// come from that administrator; they and the refresh token live in the Keychain, read by the
-/// caller (no Keychain here). Nothing is read back from Keep.
+/// Google Keep, on a Google Workspace account. Google lets no one open Keep to an app by
+/// themselves: only an administrator can, through a service account allowed for the domain
+/// (domain-wide delegation, scope keep). Yumi signs in as that account on behalf of the
+/// person's address and creates the notes there. The account's address and private key, and
+/// the person's address, live in the Keychain, read by the caller (no Keychain here). Nothing
+/// is read back from Keep.
 enum GoogleKeep {
-    static let clientIDKey = "google-keep-client-id"
-    static let clientSecretKey = "google-keep-client-secret"
-    static let refreshTokenKey = "google-keep-refresh-token"
+    static let serviceAccountKey = "google-keep-service-account"
+    static let privateKeyKey = "google-keep-private-key"
+    static let userKey = "google-keep-user"
     static let scope = "https://www.googleapis.com/auth/keep"
     static let webURL = URL(string: "https://keep.google.com")!
+    static let tokenURL = URL(string: "https://oauth2.googleapis.com/token")!
 
     struct Credentials: Equatable, Sendable {
-        var clientID: String
-        var clientSecret: String
-        var refreshToken: String
+        /// "yumi@projet.iam.gserviceaccount.com"
+        var serviceAccount: String
+        /// PEM, PKCS#8, as Google gives it in the account's JSON key.
+        var privateKey: String
+        /// The person whose Keep receives the notes.
+        var user: String
     }
 
     enum Failure: Error, Equatable {
-        /// No client ID or secret in the settings.
-        case notConfigured
-        /// Google said no: consent refused, client not allowed by the administrator, access revoked.
+        /// Not a service account's JSON key, or a private key that does not read.
+        case badKey
+        /// Google said no: the account is not allowed for Keep, the key was revoked, the address is wrong.
         case refused(String)
-        /// Nobody came back from the browser within five minutes.
-        case timedOut
     }
 
-    /// The three secrets, when all are there.
+    /// The three values, when all are there.
     static func credentials(_ read: (String) -> String?) -> Credentials? {
-        guard let id = read(clientIDKey)?.nonEmptyTrimmed, let secret = read(clientSecretKey)?.nonEmptyTrimmed,
-              let token = read(refreshTokenKey)?.nonEmptyTrimmed else { return nil }
-        return Credentials(clientID: id, clientSecret: secret, refreshToken: token)
+        guard let account = read(serviceAccountKey)?.nonEmptyTrimmed, let key = read(privateKeyKey)?.nonEmptyTrimmed,
+              let user = read(userKey)?.nonEmptyTrimmed else { return nil }
+        return Credentials(serviceAccount: account, privateKey: key, user: user)
+    }
+
+    /// The address and private key in a service account's JSON key file.
+    static func serviceAccount(fromJSON data: Data) throws -> (email: String, privateKey: String) {
+        struct File: Decodable { var type: String; var client_email: String; var private_key: String }
+        guard let file = try? JSONDecoder().decode(File.self, from: data), file.type == "service_account" else {
+            throw Failure.badKey
+        }
+        return (file.client_email, file.private_key)
     }
 
     // MARK: What is sent
 
-    static func authorizationURL(clientID: String, redirect: String, challenge: String, state: String) -> URL {
-        var components = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
-        components.queryItems = [
-            URLQueryItem(name: "client_id", value: clientID),
-            URLQueryItem(name: "redirect_uri", value: redirect),
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "scope", value: scope),
-            URLQueryItem(name: "code_challenge", value: challenge),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
-            URLQueryItem(name: "state", value: state),
-            // A refresh token, so the browser is needed only once
-            URLQueryItem(name: "access_type", value: "offline"),
-            URLQueryItem(name: "prompt", value: "consent"),
-        ]
-        return components.url!
+    /// The account asks for an access token in the person's name (RFC 7523), signed with its key.
+    static func tokenRequest(_ credentials: Credentials, now: Date = Date()) throws -> URLRequest {
+        let jwt = try assertion(credentials, now: now)
+        var request = URLRequest(url: tokenURL, timeoutInterval: 15)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        // A JWT is made of letters, digits, "-", "_" and ".": nothing to encode
+        request.httpBody = Data("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=\(jwt)".utf8)
+        return request
     }
 
-    static func codeExchange(code: String, verifier: String, redirect: String, clientID: String, clientSecret: String) -> URLRequest {
-        tokenRequest(["code": code, "code_verifier": verifier, "redirect_uri": redirect, "client_id": clientID,
-                      "client_secret": clientSecret, "grant_type": "authorization_code"])
-    }
-
-    static func refresh(_ credentials: Credentials) -> URLRequest {
-        tokenRequest(["refresh_token": credentials.refreshToken, "client_id": credentials.clientID,
-                      "client_secret": credentials.clientSecret, "grant_type": "refresh_token"])
+    static func assertion(_ credentials: Credentials, now: Date) throws -> String {
+        struct Claims: Encodable { var iss, sub, scope, aud: String; var iat, exp: Int }
+        let issued = Int(now.timeIntervalSince1970)
+        let claims = try JSONEncoder().encode(Claims(iss: credentials.serviceAccount, sub: credentials.user, scope: scope,
+                                                     aud: tokenURL.absoluteString, iat: issued, exp: issued + 3600))
+        let key = try privateKey(pem: credentials.privateKey)
+        let signed = base64URL(Data(#"{"alg":"RS256","typ":"JWT"}"#.utf8)) + "." + base64URL(claims)
+        guard let signature = SecKeyCreateSignature(key, .rsaSignatureMessagePKCS1v15SHA256, Data(signed.utf8) as CFData, nil) as Data? else {
+            throw Failure.badKey
+        }
+        return signed + "." + base64URL(signature)
     }
 
     /// A note with only a text: Keep shows it as it was typed.
@@ -79,47 +87,67 @@ enum GoogleKeep {
         return request
     }
 
-    private static func tokenRequest(_ fields: [String: String]) -> URLRequest {
-        var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!, timeoutInterval: 15)
-        request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-._~")
-        request.httpBody = Data(fields.sorted { $0.key < $1.key }
-            .map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: allowed) ?? $0.value)" }
-            .joined(separator: "&").utf8)
-        return request
-    }
-
-    // MARK: PKCE (RFC 7636)
-
-    static func challenge(for verifier: String) -> String {
-        base64URL(Data(SHA256.hash(data: Data(verifier.utf8))))
-    }
-
-    static func randomString(bytes: Int = 32) -> String {
-        base64URL(Data((0..<bytes).map { _ in UInt8.random(in: .min ... .max) }))
-    }
-
     private static func base64URL(_ data: Data) -> String {
         data.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
     }
 
-    // MARK: What comes back
+    // MARK: The key
 
-    /// What the browser brought back to the loopback address: the code, a refusal, or nil for
-    /// anything else (the favicon, a request without our `state`).
-    static func answer(inRequestLine line: String, state: String) -> Result<String, Failure>? {
-        // "GET /?state=…&code=4/0Ab… HTTP/1.1"
-        let parts = line.split(separator: " ")
-        guard parts.count >= 2, parts[0] == "GET", let items = URLComponents(string: String(parts[1]))?.queryItems,
-              items.first(where: { $0.name == "state" })?.value == state else { return nil }
-        if let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty { return .success(code) }
-        return .failure(.refused(items.first { $0.name == "error" }?.value ?? "no code"))
+    /// The RSA key of a PEM "PRIVATE KEY". The Security framework reads only the RSA key itself
+    /// (PKCS#1), so the PKCS#8 wrapper is taken off first.
+    static func privateKey(pem: String) throws -> SecKey {
+        let base64 = pem.components(separatedBy: .newlines).filter { !$0.hasPrefix("-----") }.joined()
+        guard let der = Data(base64Encoded: base64), let rsa = pkcs1(fromPKCS8: der) else { throw Failure.badKey }
+        let attributes: [CFString: Any] = [kSecAttrKeyType: kSecAttrKeyTypeRSA, kSecAttrKeyClass: kSecAttrKeyClassPrivate]
+        guard let key = SecKeyCreateWithData(rsa as CFData, attributes as CFDictionary, nil) else { throw Failure.badKey }
+        return key
     }
 
-    /// Google's own word for a refusal ("invalid_grant", "PERMISSION_DENIED"), never the whole body.
+    /// PrivateKeyInfo ::= SEQUENCE { version INTEGER, algorithm SEQUENCE, privateKey OCTET STRING }:
+    /// the content of the OCTET STRING.
+    static func pkcs1(fromPKCS8 der: Data) -> Data? {
+        var reader = DERReader(bytes: [UInt8](der))
+        guard reader.enter(0x30), reader.skip(0x02), reader.skip(0x30), let key = reader.read(0x04) else { return nil }
+        return Data(key)
+    }
+
+    private struct DERReader {
+        let bytes: [UInt8]
+        var at = 0
+
+        /// Moves past the header of the element at `at` when its tag is `tag`: its length.
+        mutating func header(_ tag: UInt8) -> Int? {
+            guard at + 1 < bytes.count, bytes[at] == tag else { return nil }
+            var length = Int(bytes[at + 1])
+            at += 2
+            if length & 0x80 != 0 {
+                let count = length & 0x7f
+                guard (1...4).contains(count), at + count <= bytes.count else { return nil }
+                length = bytes[at..<at + count].reduce(0) { $0 << 8 | Int($1) }
+                at += count
+            }
+            return at + length <= bytes.count ? length : nil
+        }
+
+        mutating func enter(_ tag: UInt8) -> Bool { header(tag) != nil }
+
+        mutating func skip(_ tag: UInt8) -> Bool {
+            guard let length = header(tag) else { return false }
+            at += length
+            return true
+        }
+
+        mutating func read(_ tag: UInt8) -> ArraySlice<UInt8>? {
+            guard let length = header(tag) else { return nil }
+            defer { at += length }
+            return bytes[at..<at + length]
+        }
+    }
+
+    // MARK: What comes back
+
+    /// Google's own word for a refusal ("unauthorized_client", "PERMISSION_DENIED"), never the whole body.
     static func reason(_ data: Data, status: Int) -> String {
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         if let word = json?["error"] as? String { return word }
@@ -129,31 +157,17 @@ enum GoogleKeep {
 
     // MARK: The network
 
-    private struct Tokens: Decodable {
-        var access_token: String
-        var refresh_token: String?
+    private struct Token: Decodable { var access_token: String }
+
+    /// Asks Google for an access token, and nothing else: whether the administrator allowed the account.
+    static func check(_ credentials: Credentials) async throws {
+        _ = try await send(tokenRequest(credentials))
     }
 
-    /// Opens Google's consent page in the browser and waits for it to come back to Yumi.
-    /// Returns the refresh token to keep in the Keychain.
-    static func signIn(clientID: String, clientSecret: String) async throws -> String {
-        let verifier = randomString(), state = randomString(bytes: 16)
-        let (code, redirect) = try await LoopbackRedirect.wait(state: state) { redirect in
-            let url = authorizationURL(clientID: clientID, redirect: redirect, challenge: challenge(for: verifier), state: state)
-            Task { @MainActor in NSWorkspace.shared.open(url) }
-        }
-        let data = try await send(codeExchange(code: code, verifier: verifier, redirect: redirect,
-                                               clientID: clientID, clientSecret: clientSecret))
-        guard let token = try JSONDecoder().decode(Tokens.self, from: data).refresh_token?.nonEmptyTrimmed else {
-            throw Failure.refused("no refresh token")
-        }
-        return token
-    }
-
-    /// Creates `text` as a note of the account.
+    /// Creates `text` as a note of the person's Keep.
     static func add(_ text: String, with credentials: Credentials) async throws {
-        let tokens = try JSONDecoder().decode(Tokens.self, from: try await send(refresh(credentials)))
-        _ = try await send(createNote(text, accessToken: tokens.access_token))
+        let token = try JSONDecoder().decode(Token.self, from: try await send(tokenRequest(credentials)))
+        _ = try await send(createNote(text, accessToken: token.access_token))
     }
 
     private static func send(_ request: URLRequest) async throws -> Data {
@@ -161,68 +175,5 @@ enum GoogleKeep {
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else { throw Failure.refused(reason(data, status: status)) }
         return data
-    }
-}
-
-/// The browser's way back to Yumi: http://127.0.0.1:<port>/, listened to on this Mac only, for one
-/// answer or five minutes, then closed.
-private enum LoopbackRedirect {
-    /// Everything runs on one serial queue: the state below is never touched from two threads.
-    private final class Wait: @unchecked Sendable {
-        var continuation: CheckedContinuation<(code: String, redirect: String), Error>?
-        var redirect = ""
-
-        init(_ continuation: CheckedContinuation<(code: String, redirect: String), Error>) { self.continuation = continuation }
-
-        func finish(_ result: Result<(code: String, redirect: String), Error>) {
-            continuation?.resume(with: result)
-            continuation = nil
-        }
-    }
-
-    static func wait(state expected: String, opening: @escaping @Sendable (String) -> Void) async throws -> (code: String, redirect: String) {
-        let parameters = NWParameters.tcp
-        parameters.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
-        let listener = try NWListener(using: parameters)
-        let queue = DispatchQueue(label: "\(AppIdentity.notificationPrefix).keep-sign-in")
-        return try await withCheckedThrowingContinuation { continuation in
-            let wait = Wait(continuation)
-            listener.stateUpdateHandler = { state in
-                switch state {
-                case .ready:
-                    guard let port = listener.port?.rawValue else { return }
-                    wait.redirect = "http://127.0.0.1:\(port)"
-                    opening(wait.redirect)
-                case .failed(let error):
-                    wait.finish(.failure(error))
-                default:
-                    break
-                }
-            }
-            listener.newConnectionHandler = { connection in
-                connection.start(queue: queue)
-                connection.receive(minimumIncompleteLength: 1, maximumLength: 16_384) { data, _, _, _ in
-                    let line = data.flatMap { String(data: $0, encoding: .utf8) }?.components(separatedBy: "\r\n").first ?? ""
-                    let answer = GoogleKeep.answer(inRequestLine: line, state: expected)
-                    let page: String
-                    switch answer {
-                    case .success?: page = "C'est fait : Yumi peut écrire dans ton Google Keep. Tu peux fermer cet onglet."
-                    case .failure?: page = "Google n'a pas donné l'accès. Reviens dans Yumi pour réessayer."
-                    case nil: page = ""
-                    }
-                    let reply = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n"
-                        + "<!doctype html><meta charset=utf-8><body style=\"font: 15px -apple-system; padding: 40px\">\(page)</body>"
-                    connection.send(content: Data(reply.utf8), completion: .contentProcessed { _ in connection.cancel() })
-                    guard let answer else { return }
-                    listener.cancel()
-                    wait.finish(answer.map { (code: $0, redirect: wait.redirect) }.mapError { $0 as Error })
-                }
-            }
-            queue.asyncAfter(deadline: .now() + 300) {
-                listener.cancel()
-                wait.finish(.failure(GoogleKeep.Failure.timedOut))
-            }
-            listener.start(queue: queue)
-        }
     }
 }

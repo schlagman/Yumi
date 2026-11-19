@@ -70,10 +70,10 @@ final class KeychainStore: @unchecked Sendable {
         // Not "notion-api-key": that old name is erased once at launch.
         "notion-integration-key",
         "gmail-app-password",
-        // Google Keep: the OAuth client given by the Workspace administrator, and the refresh token.
-        "google-keep-client-id",
-        "google-keep-client-secret",
-        "google-keep-refresh-token",
+        // Google Keep: the service account the Workspace administrator allowed for Keep, and whose Keep it writes to.
+        "google-keep-service-account",
+        "google-keep-private-key",
+        "google-keep-user",
     ]
 
     /// Keys of the old integrations, removed from Yumi: erased once.

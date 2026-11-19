@@ -1,54 +1,88 @@
 import Testing
 import Foundation
+import Security
 
 @Suite struct GoogleKeepTests {
-    private let credentials = GoogleKeep.Credentials(clientID: "123.apps.googleusercontent.com", clientSecret: "GOCSPX-a+b",
-                                                     refreshToken: "1//0g-token")
-
-    private func form(_ request: URLRequest) -> [String: String] {
-        let body = String(data: request.httpBody ?? Data(), encoding: .utf8) ?? ""
-        return Dictionary(uniqueKeysWithValues: body.split(separator: "&").map { pair in
-            let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
-            return (parts[0], parts.count > 1 ? parts[1].removingPercentEncoding ?? "" : "")
-        })
+    /// A throwaway RSA key, written as Google writes it in a service account's JSON: PEM, PKCS#8.
+    private static func serviceAccountKey() throws -> (pem: String, publicKey: SecKey) {
+        let attributes: [CFString: Any] = [kSecAttrKeyType: kSecAttrKeyTypeRSA, kSecAttrKeySizeInBits: 2048]
+        let key = try #require(SecKeyCreateRandomKey(attributes as CFDictionary, nil))
+        let rsa = try #require(SecKeyCopyExternalRepresentation(key, nil) as Data?)
+        // PrivateKeyInfo: version 0, rsaEncryption, then the RSA key in an OCTET STRING
+        let algorithm: [UInt8] = [0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00]
+        let info = der(0x30, [0x02, 0x01, 0x00] + algorithm + der(0x04, [UInt8](rsa)))
+        let pem = "-----BEGIN PRIVATE KEY-----\n" + Data(info).base64EncodedString(options: .lineLength64Characters)
+            + "\n-----END PRIVATE KEY-----\n"
+        return (pem, try #require(SecKeyCopyPublicKey(key)))
     }
 
-    @Test func needsAllThreeSecrets() {
-        let all = [GoogleKeep.clientIDKey: "id", GoogleKeep.clientSecretKey: "secret", GoogleKeep.refreshTokenKey: "token"]
-        #expect(GoogleKeep.credentials { all[$0] } == GoogleKeep.Credentials(clientID: "id", clientSecret: "secret", refreshToken: "token"))
+    private static func der(_ tag: UInt8, _ content: [UInt8]) -> [UInt8] {
+        let n = content.count
+        let length: [UInt8] = n < 0x80 ? [UInt8(n)] : n < 0x100 ? [0x81, UInt8(n)] : [0x82, UInt8(n >> 8), UInt8(n & 0xff)]
+        return [tag] + length + content
+    }
+
+    private func base64URL(_ part: Substring) -> Data? {
+        var text = part.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        while text.count % 4 != 0 { text += "=" }
+        return Data(base64Encoded: text)
+    }
+
+    @Test func needsAllThreeValues() {
+        let all = [GoogleKeep.serviceAccountKey: "yumi@p.iam.gserviceaccount.com", GoogleKeep.privateKeyKey: "pem",
+                   GoogleKeep.userKey: "julien@example.com"]
+        #expect(GoogleKeep.credentials { all[$0] } == GoogleKeep.Credentials(serviceAccount: "yumi@p.iam.gserviceaccount.com",
+                                                                              privateKey: "pem", user: "julien@example.com"))
         var missing = all
-        missing[GoogleKeep.refreshTokenKey] = " "
+        missing[GoogleKeep.userKey] = " "
         #expect(GoogleKeep.credentials { missing[$0] } == nil)
     }
 
-    @Test func pkceChallengeIsTheSHA256OfTheVerifier() {
-        // Computed apart, with Python's hashlib
-        #expect(GoogleKeep.challenge(for: "dBjftJeZ4CVP-mJ92K9pYW8DwLY9EQ8gdIVJ6ZzEOdA") == "9ouR2eQoLkp7jbu6JbKR-zwg2M_qtix7j5myfmrlLCg")
-        let verifier = GoogleKeep.randomString()
-        #expect(verifier.count == 43 && verifier.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" })
-        #expect(verifier != GoogleKeep.randomString())
+    @Test func readsOnlyAServiceAccountFile() throws {
+        let file = #"{"type": "service_account", "project_id": "p", "client_email": "yumi@p.iam.gserviceaccount.com", "private_key": "-----BEGIN PRIVATE KEY-----\nAB\n-----END PRIVATE KEY-----\n"}"#
+        let key = try GoogleKeep.serviceAccount(fromJSON: Data(file.utf8))
+        #expect(key.email == "yumi@p.iam.gserviceaccount.com")
+        #expect(key.privateKey == "-----BEGIN PRIVATE KEY-----\nAB\n-----END PRIVATE KEY-----\n")
+        // An OAuth client's file, or anything else, is not one
+        #expect(throws: GoogleKeep.Failure.badKey) {
+            try GoogleKeep.serviceAccount(fromJSON: Data(#"{"installed": {"client_id": "x"}}"#.utf8))
+        }
+        #expect(throws: GoogleKeep.Failure.badKey) { try GoogleKeep.serviceAccount(fromJSON: Data("nope".utf8)) }
     }
 
-    @Test func asksForKeepOnlyWithPKCEAndAState() throws {
-        let url = GoogleKeep.authorizationURL(clientID: "id", redirect: "http://127.0.0.1:5000", challenge: "ch", state: "st")
-        let items = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
-        let value = { (name: String) in items.first { $0.name == name }?.value }
-        #expect(url.host == "accounts.google.com")
-        #expect(value("scope") == "https://www.googleapis.com/auth/keep")
-        #expect(value("code_challenge_method") == "S256" && value("code_challenge") == "ch")
-        #expect(value("state") == "st" && value("redirect_uri") == "http://127.0.0.1:5000")
-        #expect(value("access_type") == "offline")
+    @Test func asksInThePersonsNameWithASignatureOfTheAccountKey() throws {
+        let (pem, publicKey) = try Self.serviceAccountKey()
+        let credentials = GoogleKeep.Credentials(serviceAccount: "yumi@p.iam.gserviceaccount.com", privateKey: pem, user: "julien@example.com")
+        let request = try GoogleKeep.tokenRequest(credentials, now: Date(timeIntervalSince1970: 1_800_000_000))
+        #expect(request.url?.absoluteString == "https://oauth2.googleapis.com/token" && request.httpMethod == "POST")
+
+        let body = String(data: request.httpBody ?? Data(), encoding: .utf8) ?? ""
+        let prefix = "grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion="
+        #expect(body.hasPrefix(prefix))
+        let parts = body.dropFirst(prefix.count).split(separator: ".")
+        try #require(parts.count == 3)
+
+        let header = try #require(base64URL(parts[0]).flatMap { try JSONSerialization.jsonObject(with: $0) as? [String: String] })
+        #expect(header == ["alg": "RS256", "typ": "JWT"])
+        let claims = try #require(base64URL(parts[1]).flatMap { try JSONSerialization.jsonObject(with: $0) as? [String: Any] })
+        #expect(claims["iss"] as? String == "yumi@p.iam.gserviceaccount.com")
+        #expect(claims["sub"] as? String == "julien@example.com")
+        #expect(claims["scope"] as? String == "https://www.googleapis.com/auth/keep")
+        #expect(claims["aud"] as? String == "https://oauth2.googleapis.com/token")
+        #expect(claims["iat"] as? Int == 1_800_000_000 && claims["exp"] as? Int == 1_800_003_600)
+
+        let signature = try #require(base64URL(parts[2]))
+        #expect(SecKeyVerifySignature(publicKey, .rsaSignatureMessagePKCS1v15SHA256, Data("\(parts[0]).\(parts[1])".utf8) as CFData,
+                                      signature as CFData, nil))
     }
 
-    @Test func exchangesAndRefreshesWithAnEncodedForm() {
-        let exchange = form(GoogleKeep.codeExchange(code: "4/0Ab", verifier: "v", redirect: "http://127.0.0.1:5000",
-                                                    clientID: credentials.clientID, clientSecret: credentials.clientSecret))
-        #expect(exchange["grant_type"] == "authorization_code" && exchange["code"] == "4/0Ab" && exchange["code_verifier"] == "v")
-        #expect(exchange["client_secret"] == "GOCSPX-a+b")
-        let refresh = GoogleKeep.refresh(credentials)
-        #expect(refresh.url?.absoluteString == "https://oauth2.googleapis.com/token")
-        #expect(String(data: refresh.httpBody ?? Data(), encoding: .utf8)?.contains("a%2Bb") == true)
-        #expect(form(refresh)["grant_type"] == "refresh_token" && form(refresh)["refresh_token"] == "1//0g-token")
+    @Test func aKeyThatDoesNotReadIsSaidSo() {
+        #expect(throws: GoogleKeep.Failure.badKey) {
+            try GoogleKeep.privateKey(pem: "-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----")
+        }
+        // Cut short, or another structure
+        #expect(GoogleKeep.pkcs1(fromPKCS8: Data([0x30, 0x82, 0x04, 0xbd, 0x02])) == nil)
+        #expect(GoogleKeep.pkcs1(fromPKCS8: Data([0x04, 0x01, 0x00])) == nil)
     }
 
     @Test func createsANoteWithItsTextOnly() throws {
@@ -62,17 +96,8 @@ import Foundation
         #expect(Set(json.keys) == ["body"])
     }
 
-    @Test func readsWhatTheBrowserBroughtBack() {
-        #expect(GoogleKeep.answer(inRequestLine: "GET /?state=st&code=4/0Ab&scope=x HTTP/1.1", state: "st") == .success("4/0Ab"))
-        #expect(GoogleKeep.answer(inRequestLine: "GET /?error=access_denied&state=st HTTP/1.1", state: "st") == .failure(.refused("access_denied")))
-        // Another page's answer, or the favicon, is not ours
-        #expect(GoogleKeep.answer(inRequestLine: "GET /?state=other&code=4/0Ab HTTP/1.1", state: "st") == nil)
-        #expect(GoogleKeep.answer(inRequestLine: "GET /favicon.ico HTTP/1.1", state: "st") == nil)
-        #expect(GoogleKeep.answer(inRequestLine: "", state: "st") == nil)
-    }
-
     @Test func saysGooglesWordNotItsBody() {
-        #expect(GoogleKeep.reason(Data(#"{"error": "invalid_grant", "error_description": "Bad"}"#.utf8), status: 400) == "invalid_grant")
+        #expect(GoogleKeep.reason(Data(#"{"error": "unauthorized_client", "error_description": "Bad"}"#.utf8), status: 401) == "unauthorized_client")
         #expect(GoogleKeep.reason(Data(#"{"error": {"code": 403, "status": "PERMISSION_DENIED"}}"#.utf8), status: 403) == "PERMISSION_DENIED")
         #expect(GoogleKeep.reason(Data("<html>".utf8), status: 502) == "HTTP 502")
     }

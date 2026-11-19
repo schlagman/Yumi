@@ -1,4 +1,6 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Modules: which ones Yumi shows and in what order, then the settings of GitHub, Notion, Agenda and screen time.
 /// Keys go to the Keychain, under the same names as before.
@@ -265,57 +267,76 @@ private struct MusicSettingsSection: View {
     }
 }
 
-/// Notes: Google Keep, on a work account whose administrator allowed Yumi's OAuth client.
+/// Notes: Google Keep, through a service account the Workspace administrator allowed for Keep.
 private struct GoogleKeepSection: View {
-    @State private var clientID = KeychainStore.shared.get(GoogleKeep.clientIDKey) ?? ""
-    @State private var secret = KeychainStore.shared.get(GoogleKeep.clientSecretKey) ?? ""
-    @State private var connected = KeychainStore.shared.get(GoogleKeep.refreshTokenKey)?.isEmpty == false
-    @State private var waiting = false
+    @State private var account = KeychainStore.shared.get(GoogleKeep.serviceAccountKey)
+    @State private var user = KeychainStore.shared.get(GoogleKeep.userKey) ?? ""
+    @State private var checking = false
     @State private var status: String?
 
     var body: some View {
         Section {
-            if connected {
-                LabeledContent("Google Keep") { Text(loc("Connecté")).foregroundStyle(.secondary) }
-                Button(loc("Se déconnecter")) {
-                    KeychainStore.shared.remove(GoogleKeep.refreshTokenKey)
-                    connected = false
-                }
-            } else {
-                TextField(loc("ID client OAuth"), text: $clientID)
-                SecureField(loc("Code secret du client"), text: $secret)
-                HStack {
-                    Button(waiting ? loc("En attente du navigateur…") : loc("Se connecter à Google")) { connect() }
-                        .disabled(waiting || clientID.nonEmptyTrimmed == nil || secret.nonEmptyTrimmed == nil)
-                    if let status { Text(status).foregroundStyle(.secondary).lineLimit(2) }
-                }
+            LabeledContent(loc("Compte de service")) {
+                Text(verbatim: account ?? loc("aucun")).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            }
+            HStack {
+                Button(loc("Choisir sa clé JSON…")) { chooseKey() }
+                if account != nil { Button(loc("Oublier la clé")) { forgetKey() } }
+            }
+            TextField(loc("Ton adresse Google"), text: $user)
+                .onChange(of: user) { _, value in KeychainStore.shared.set(GoogleKeep.userKey, value: value.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            HStack {
+                Button(checking ? loc("Vérification…") : loc("Vérifier")) { check() }
+                    .disabled(checking || account == nil || user.nonEmptyTrimmed == nil)
+                if let status { Text(status).foregroundStyle(.secondary).lineLimit(2) }
             }
         } header: {
             Text("Google Keep")
         } footer: {
-            SettingsHelp(loc("Chaque note que tu gardes avec Yumi part aussi dans ton Google Keep, et « Tout voir » l'ouvre. Il faut un compte Google Workspace dont l'administrateur a autorisé ce client OAuth (délégation au niveau du domaine, accès à Keep) : l'ID et le code secret viennent de lui et restent dans le trousseau du Mac."))
+            SettingsHelp(loc("Google ne laisse ouvrir Keep à une app que par l'administrateur Google Workspace : il crée un compte de service, l'autorise pour Keep (délégation au niveau du domaine) et te donne sa clé JSON. Yumi la garde dans le trousseau du Mac : supprime ensuite le fichier. Chaque note que tu gardes avec Yumi part aussi dans ton Keep, et « Tout voir » l'ouvre."))
         }
     }
 
-    private func connect() {
-        let id = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
-        let key = secret.trimmingCharacters(in: .whitespacesAndNewlines)
-        KeychainStore.shared.set(GoogleKeep.clientIDKey, value: id)
-        KeychainStore.shared.set(GoogleKeep.clientSecretKey, value: key)
-        waiting = true
+    private func chooseKey() {
+        let panel = NSOpenPanel()
+        panel.message = loc("Choisis la clé JSON du compte de service")
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let key = try GoogleKeep.serviceAccount(fromJSON: try Data(contentsOf: url))
+            _ = try GoogleKeep.privateKey(pem: key.privateKey)
+            KeychainStore.shared.set(GoogleKeep.serviceAccountKey, value: key.email)
+            KeychainStore.shared.set(GoogleKeep.privateKeyKey, value: key.privateKey)
+            account = key.email
+            status = loc("Clé gardée dans le trousseau. Tu peux supprimer le fichier.")
+        } catch {
+            status = loc("Ce fichier n'est pas la clé JSON d'un compte de service.")
+        }
+    }
+
+    private func forgetKey() {
+        KeychainStore.shared.remove(GoogleKeep.serviceAccountKey)
+        KeychainStore.shared.remove(GoogleKeep.privateKeyKey)
+        account = nil
+        status = nil
+    }
+
+    private func check() {
+        guard let credentials = GoogleKeep.credentials(KeychainStore.shared.get) else { return }
+        checking = true
         status = nil
         Task {
             do {
-                KeychainStore.shared.set(GoogleKeep.refreshTokenKey, value: try await GoogleKeep.signIn(clientID: id, clientSecret: key))
-                connected = true
+                try await GoogleKeep.check(credentials)
+                status = loc("✓ Google ouvre ton Keep à Yumi.")
             } catch GoogleKeep.Failure.refused(let word) {
                 status = loc("Refusé par Google : \(word).")
-            } catch GoogleKeep.Failure.timedOut {
-                status = loc("Pas de retour du navigateur.")
+            } catch GoogleKeep.Failure.badKey {
+                status = loc("Ce fichier n'est pas la clé JSON d'un compte de service.")
             } catch {
-                status = loc("La connexion n'a pas abouti.")
+                status = loc("Pas de réponse de Google.")
             }
-            waiting = false
+            checking = false
         }
     }
 }
