@@ -25,7 +25,7 @@ Le détail de chaque tâche est dans `tasks/todo.md`.
 - [ ] Les tâches planifiées réelles apparaissent avec le bon état ; un rapport écrit à la main s'affiche en moins de 2 s
 
 ### Phase 2 : Jauge de contexte
-- [ ] Tâche 5 : tokens et pourcentage au `Stop`, ligne « Contexte NN % », suggestion de `/compact` à 80 %
+- [x] Tâche 5 : tokens et pourcentage au `Stop`, ligne « Contexte NN % », suggestion de `/compact` à 80 %
 
 ### Point de contrôle B
 - [ ] Tests verts ; sur une vraie session, ±2 points de l'indicateur de Claude Code

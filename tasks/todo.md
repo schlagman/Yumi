@@ -76,9 +76,9 @@ Commandes (depuis `Yumi/`) :
 - Le journal garde ce pourcentage, ajoute « Contexte NN % » aux détails de la ligne, et à 80 % ou plus, session au repos, change le détail en suggestion de `/compact`.
 
 **Critères d'acceptation :**
-- [ ] C'est la dernière ligne `assistant` avec un `usage` qui compte ; les champs de cache absents valent 0.
-- [ ] La fenêtre est de 1M avec `[1m]` ou au-delà de 200 000 tokens, sinon 200 000 ; le pourcentage est borné entre 0 et 100.
-- [ ] La suggestion n'apparaît pas pendant que la session travaille.
+- [x] C'est la dernière ligne `assistant` avec un `usage` qui compte ; les champs de cache absents valent 0.
+- [x] La fenêtre est de 1M avec `[1m]` ou au-delà de 200 000 tokens, sinon 200 000 ; le pourcentage est borné entre 0 et 100.
+- [x] La suggestion n'apparaît pas pendant que la session travaille.
 
 **Vérification :** `ClaudeSessionJournalTests` mis à jour et verts ; comparaison avec l'indicateur de Claude Code sur une vraie session.
 **Dépendances :** aucune.

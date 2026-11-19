@@ -364,7 +364,9 @@ struct SessionBoard: Equatable, Sendable {
             if let step = journal.current { row.detail = step.sentence }
             else if let task = journal.currentTask { row.detail = task }
         case .success:
-            if let summary = journal.summary { row.detail = summary }
+            // A full context is worth a compact before the next request, more than the summary.
+            if let context = journal.context, context >= 80 { row.detail = loc("Contexte à \(context) %, pense à /compact") }
+            else if let summary = journal.summary { row.detail = summary }
         default:
             break
         }

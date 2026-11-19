@@ -10,7 +10,15 @@ private func hook(_ name: String, session: String = "s1", _ extra: [String: Any]
 }
 
 private func note(_ payload: [String: Any], last: String? = nil) -> SessionNote.Kind? {
-    SessionNote.from(payload, lastMessage: { _ in last })?.kind
+    SessionNote.from(payload, transcript: { _ in last.map { assistantLine($0) } })?.kind
+}
+
+/// One line of a transcript: Claude's answer, with what the turn cost in tokens when given.
+private func assistantLine(_ text: String, usage: [String: Int]? = nil) -> String {
+    var message: [String: Any] = ["content": [["type": "text", "text": text]]]
+    if let usage { message["usage"] = usage }
+    let data = try! JSONSerialization.data(withJSONObject: ["type": "assistant", "message": message])
+    return String(data: data, encoding: .utf8)!
 }
 
 private var todos: [String: Any] { ["todos": [
@@ -159,5 +167,60 @@ private final class ClaudeSessionJournalsTestDouble {
         #expect(row.detail == "Écrit le test")
         #expect(row.progress == "1/3")
         #expect(row.details.contains("Tâche 1/3 : Écrit le test"))
+    }
+
+}
+
+/// How full each session's context is, from the end of its transcript.
+@Suite struct ClaudeSessionContextTests {
+    private let start = Date(timeIntervalSince1970: 1_000_000)
+
+
+    @Test func theContextIsWhatTheLastAnswerCost() {
+        let transcript = [
+            "ng\":\"tronquée au début\"}",
+            assistantLine("Avant", usage: ["input_tokens": 1_000, "cache_read_input_tokens": 9_000]),
+            #"{"type":"user","message":{"content":"et ensuite ?"}}"#,
+            assistantLine("Après", usage: ["input_tokens": 2_000, "cache_read_input_tokens": 150_000, "cache_creation_input_tokens": 8_000]),
+            assistantLine("Sans usage"),
+        ].joined(separator: "\n")
+        #expect(SessionText.contextTokens(transcript: transcript) == 160_000)
+        #expect(SessionText.contextTokens(transcript: assistantLine("Rien")) == nil)
+        #expect(SessionText.contextTokens(transcript: assistantLine("Sans cache", usage: ["input_tokens": 500])) == 500)
+    }
+
+    @Test func theShareIsOfTheModelsWindow() {
+        #expect(SessionText.contextShare(tokens: 160_000, model: nil) == 80)
+        #expect(SessionText.contextShare(tokens: 160_000, model: "claude-opus-5-5[1m]") == 16)
+        // Past 200 000 tokens the window can only be the large one
+        #expect(SessionText.contextShare(tokens: 300_000, model: nil) == 30)
+        #expect(SessionText.contextShare(tokens: 0, model: nil) == 0)
+        #expect(SessionText.contextShare(tokens: 2_000_000, model: nil) == 100)
+    }
+
+    @Test func aFinishedTurnTellsTheContextAndSuggestsCompactingWhenFull() {
+        let stop = hook("Stop", ["transcript_path": "/tmp/t.jsonl", "host_model": "claude-opus-5-5"])
+        let kind = SessionNote.from(stop, transcript: { _ in
+            assistantLine("Fini.", usage: ["input_tokens": 1_000, "cache_read_input_tokens": 169_000])
+        })?.kind
+        var journal = SessionJournal(started: start)
+        if let kind { journal.apply(kind, now: start) }
+        #expect(journal.context == 85)
+        #expect(journal.details(now: start).contains("Contexte 85 %"))
+        let row = SessionBoard.enriched(ModuleRow(id: "s1", title: "yumi", detail: "", state: .success, label: "a fini"), journal, now: start)
+        #expect(row.detail == "Contexte à 85 %, pense à /compact")
+        // The next request keeps the gauge until the next answer
+        if let next = note(hook("UserPromptSubmit", ["prompt": "Continue"])) { journal.apply(next, now: start) }
+        #expect(journal.context == 85)
+    }
+
+    @Test func aRoomyContextLeavesTheSummary() {
+        var journal = SessionJournal(started: start)
+        if let kind = SessionNote.from(hook("Stop", ["transcript_path": "/tmp/t.jsonl"]), transcript: { _ in
+            assistantLine("J'ai fini le test.", usage: ["input_tokens": 40_000])
+        })?.kind { journal.apply(kind, now: start) }
+        let row = SessionBoard.enriched(ModuleRow(id: "s1", title: "yumi", detail: "", state: .success, label: "a fini"), journal, now: start)
+        #expect(row.detail.hasSuffix("J'ai fini le test."))
+        #expect(journal.details(now: start).contains("Contexte 20 %"))
     }
 }

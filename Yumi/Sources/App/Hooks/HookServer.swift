@@ -122,9 +122,7 @@ final class HookServer: @unchecked Sendable {
 
         // What the session is working on, for the module's details. Read here, off the main thread:
         // a Stop reads the end of the session's transcript, on this Mac only.
-        if let note = SessionNote.from(payload, lastMessage: { path in
-            SessionText.readTail(path).flatMap(SessionText.lastAssistantText(transcript:))
-        }) {
+        if let note = SessionNote.from(payload, transcript: { SessionText.readTail($0) }) {
             Task { @MainActor in ClaudeSessionJournals.shared.apply(note) }
         }
 
@@ -1012,7 +1010,7 @@ import sys, json, os, socket, subprocess, glob, re
 def claude_app_session(event):
     # The Claude app gives each session an id (local_...) and files it with its title and, for a
     # side session, the session it came from. That file is not documented: anything unexpected
-    # leaves the fields out, and only those two values are read. Never on the frequent tool hooks.
+    # leaves the fields out, and only the title, the parent and the model are read. Never on the frequent tool hooks.
     sid = os.environ.get('CLAUDE_CODE_HOST_SESSION_ID', '')
     if not re.fullmatch('local_[0-9a-f-]{36}', sid):
         return {}
@@ -1029,6 +1027,10 @@ def claude_app_session(event):
             title = card.get('title')
             if isinstance(title, str) and title.strip():
                 found['host_title'] = title.strip()[:120]
+            # The model tells the size of the context window ("[1m]"), for the context gauge.
+            model = card.get('model')
+            if isinstance(model, str) and model.strip():
+                found['host_model'] = model.strip()[:80]
             parent = (card.get('spawnedFrom') or {}).get('sessionId')
             if isinstance(parent, str) and re.fullmatch('local_[0-9a-f-]{36}', parent):
                 found['host_parent_session_id'] = parent

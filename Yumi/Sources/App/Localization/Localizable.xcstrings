@@ -14404,6 +14404,26 @@
           }
         }
       }
+    },
+    "Contexte %lld %%": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Context %lld%%"
+          }
+        }
+      }
+    },
+    "Contexte à %lld %%, pense à /compact": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Context at %lld%%, time to /compact"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

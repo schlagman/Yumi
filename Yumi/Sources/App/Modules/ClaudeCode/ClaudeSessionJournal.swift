@@ -12,8 +12,9 @@ struct SessionNote: Equatable, Sendable {
         case toolStarted(ToolStep)
         case toolFinished(ToolStep, failed: Bool)
         case todos([SessionTodo])
-        /// The end of a turn, with Claude's last message when it could be read.
-        case stop(lastMessage: String?)
+        /// The end of a turn, with Claude's last message and how full the context is (percent),
+        /// when the transcript could be read.
+        case stop(lastMessage: String?, context: Int?)
         case notification(String)
         case ended
     }
@@ -22,8 +23,8 @@ struct SessionNote: Equatable, Sendable {
     var kind: Kind
 
     /// The note of a hook payload, nil for one that says nothing new.
-    /// - Parameter lastMessage: reads Claude's last message for a Stop (from the transcript).
-    static func from(_ payload: [String: Any], lastMessage: (String) -> String? = { _ in nil }) -> SessionNote? {
+    /// - Parameter transcript: reads the end of the transcript at a path, for a Stop only.
+    static func from(_ payload: [String: Any], transcript: (String) -> String? = { _ in nil }) -> SessionNote? {
         guard let session = payload["session_id"] as? String else { return nil }
         let input = payload["tool_input"] as? [String: Any] ?? [:]
         let tool = payload["tool_name"] as? String ?? ""
@@ -43,8 +44,11 @@ struct SessionNote: Equatable, Sendable {
         case "PostToolUseFailure":
             return SessionNote(session: session, kind: .toolFinished(ToolStep(tool: tool, input: input), failed: true))
         case "Stop":
-            let message = (payload["transcript_path"] as? String).flatMap(lastMessage)
-            return SessionNote(session: session, kind: .stop(lastMessage: message.flatMap(SessionText.firstSentence)))
+            let tail = (payload["transcript_path"] as? String).flatMap(transcript)
+            let message = tail.flatMap(SessionText.lastAssistantText(transcript:)).flatMap(SessionText.firstSentence)
+            let context = tail.flatMap(SessionText.contextTokens(transcript:))
+                .map { SessionText.contextShare(tokens: $0, model: payload["host_model"] as? String) }
+            return SessionNote(session: session, kind: .stop(lastMessage: message, context: context))
         case "Notification":
             guard let message = (payload["message"] as? String).flatMap({ SessionText.oneLine($0) }), !message.isEmpty else { return nil }
             return SessionNote(session: session, kind: .notification(message))
@@ -141,10 +145,15 @@ struct SessionJournal: Equatable, Sendable {
     /// Set when a turn ends, cleared by the next request.
     var summary: String?
     var notification: String?
+    /// How full the context was at the end of the last turn, in percent. Kept from turn to turn.
+    var context: Int?
 
     static let historyLength = 12
 
-    init(started: Date) { self.started = started }
+    init(started: Date, context: Int? = nil) {
+        self.started = started
+        self.context = context
+    }
 
     /// "3/7", nil without a list.
     var progress: String? {
@@ -161,7 +170,7 @@ struct SessionJournal: Equatable, Sendable {
         switch kind {
         case .prompt(let text):
             // A new request: a new turn, with its own count
-            self = SessionJournal(started: now)
+            self = SessionJournal(started: now, context: context)
             request = text
         case .toolStarted(let step):
             current = step
@@ -175,8 +184,9 @@ struct SessionJournal: Equatable, Sendable {
             if failed { failures += 1 }
         case .todos(let list):
             todos = list
-        case .stop(let message):
+        case .stop(let message, let share):
             current = nil
+            if let share { context = share }
             summary = Self.summary(files: filesTouched.count, commands: commands, todos: todos, message: message)
         case .notification(let text):
             notification = text
@@ -207,6 +217,7 @@ struct SessionJournal: Equatable, Sendable {
         if let task = currentTask, let progress { lines.append(loc("Tâche \(progress) : \(task)")) }
         if let summary { lines.append(summary) }
         for step in history.reversed() { lines.append("· " + step.sentence) }
+        if let context { lines.append(loc("Contexte \(context) %")) }
         lines.append(loc("Depuis \(FrenchText.minutes(now.timeIntervalSince(started)))"))
         return lines
     }
@@ -249,6 +260,26 @@ enum SessionText {
             if let text = parts.last, !text.isEmpty { return text }
         }
         return nil
+    }
+
+    /// The tokens the context held at the last answer: what that answer read, cached or not.
+    static func contextTokens(transcript: String) -> Int? {
+        for line in transcript.split(separator: "\n").reversed() {
+            guard let data = line.data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  object["type"] as? String == "assistant",
+                  let usage = (object["message"] as? [String: Any])?["usage"] as? [String: Any] else { continue }
+            return ["input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"].reduce(0) { $0 + (usage[$1] as? Int ?? 0) }
+        }
+        return nil
+    }
+
+    /// The context's share of the model's window, 0 to 100. The model comes from the Claude app.
+    /// shortcut: a 1M session run from a terminal is measured against 200 000 tokens until it passes them
+    /// (Claude Code's hooks do not give the model); upgrade if they ever do.
+    static func contextShare(tokens: Int, model: String?) -> Int {
+        let window = model?.hasSuffix("[1m]") == true || tokens > 200_000 ? 1_000_000 : 200_000
+        return min(100, max(0, Int((Double(tokens) / Double(window) * 100).rounded())))
     }
 
     /// The end of a transcript file: the last 64 KB are enough for the last message.
