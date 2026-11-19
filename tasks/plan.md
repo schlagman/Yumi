@@ -31,7 +31,7 @@ Le détail de chaque tâche est dans `tasks/todo.md`.
 - [ ] Tests verts ; sur une vraie session, ±2 points de l'indicateur de Claude Code
 
 ### Phase 3 : Images pour le web
-- [ ] Tâche 6 : `WebImage.make` et ses tests
+- [x] Tâche 6 : `WebImage.make` et ses tests
 - [ ] Tâche 7 : bouton « Pour le web » dans la zone de dépose
 
 ### Point de contrôle C : terminé

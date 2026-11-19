@@ -14,7 +14,7 @@ Avant de mettre une image sur le site, il faut la redimensionner et la compresse
   - plus grand côté ramené à 2000 px s'il est plus grand ; jamais agrandi ; orientation EXIF appliquée ;
   - image avec transparence : PNG ; sinon JPEG en qualité 0,82 ;
   - métadonnées retirées (GPS, appareil) ;
-  - si le résultat n'est pas plus léger que l'original et que l'image n'a pas été réduite, l'original est recopié tel quel.
+  - toujours réencodée, même petite : recopier l'original garderait ses métadonnées (GPS).
 
 ## Hors périmètre
 - WebP et AVIF : Webflow convertit lui-même dans son panneau d'assets.

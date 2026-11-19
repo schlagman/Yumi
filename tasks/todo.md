@@ -95,10 +95,10 @@ Commandes (depuis `Yumi/`) :
 - l'original est recopié tel quel s'il est déjà plus léger.
 
 **Critères d'acceptation :**
-- [ ] Une image de 4000 × 3000 donne 2000 × 1500 en JPEG.
-- [ ] Une image transparente reste en PNG avec sa transparence.
-- [ ] Une image de 800 px n'est pas agrandie.
-- [ ] Des données qui ne sont pas une image donnent nil.
+- [x] Une image de 4000 × 3000 donne 2000 × 1500 en JPEG.
+- [x] Une image transparente reste en PNG avec sa transparence.
+- [x] Une image de 800 px n'est pas agrandie.
+- [x] Des données qui ne sont pas une image donnent nil.
 
 **Vérification :** `Tests/Core/WebImageTests.swift` vert.
 **Dépendances :** aucune.
