@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 // The open island shows one activity at a time, each with its own layout
 // (`STATES[...].view()` in design/maquette/reference.html, version 13): a few lines
@@ -652,6 +653,11 @@ struct DropActivity: View {
                 RoundButton(style: .tint, symbol: "text.alignleft", label: loc("Résumer"), color: IslandTheme.blue) { IslandActions.summarize() }
                 RoundButton(symbol: "paperplane.fill", label: loc("Envoyer")) { IslandActions.sendByMail() }
                 RoundButton(symbol: "tray.and.arrow.down.fill", label: loc("Ranger")) { IslandActions.putAway() }
+                #if !APPSTORE
+                if UTType(filenameExtension: (file.name as NSString).pathExtension)?.conforms(to: .image) == true {
+                    RoundButton(symbol: "photo", label: loc("Pour le web")) { IslandActions.webReady() }
+                }
+                #endif
             }
         } else {
             VStack(alignment: .leading, spacing: 3) {

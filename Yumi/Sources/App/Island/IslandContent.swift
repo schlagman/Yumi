@@ -336,6 +336,34 @@ enum IslandActions {
         go(.prompt)
     }
 
+    #if !APPSTORE
+    /// "Pour le web": a light copy of the dropped image in Downloads, shown in the Finder.
+    /// The work is done off the main thread: a large photo takes a moment.
+    static func webReady() {
+        guard let file = state.droppedFile else { return tap() }
+        let source = file.url, name = (file.name as NSString).deletingPathExtension
+        Task {
+            let made = await Task.detached(priority: .userInitiated) { (try? Data(contentsOf: source)).flatMap(WebImage.make) }.value
+            let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
+            var target = downloads.appendingPathComponent("\(name)-web.\(made?.ext ?? "jpg")")
+            var number = 2
+            while FileManager.default.fileExists(atPath: target.path) {
+                target = downloads.appendingPathComponent("\(name)-web-\(number).\(made?.ext ?? "jpg")")
+                number += 1
+            }
+            guard let made, (try? made.data.write(to: target, options: .withoutOverwriting)) != nil else {
+                state.noteMessage = loc("Je n'ai pas réussi à préparer cette image.")
+                state.view = .note
+                return
+            }
+            NSWorkspace.shared.activateFileViewerSelecting([target])
+            SoundEngine.shared.play("approve")
+            IslandModel.shared.pose(.pop)
+            fold()
+        }
+    }
+    #endif
+
     /// "Envoyer": a new mail with the file attached; the user writes and sends it.
     static func sendByMail() {
         guard let file = state.droppedFile, let service = NSSharingService(named: .composeEmail) else {

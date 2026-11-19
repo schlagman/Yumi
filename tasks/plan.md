@@ -32,7 +32,7 @@ Le détail de chaque tâche est dans `tasks/todo.md`.
 
 ### Phase 3 : Images pour le web
 - [x] Tâche 6 : `WebImage.make` et ses tests
-- [ ] Tâche 7 : bouton « Pour le web » dans la zone de dépose
+- [x] Tâche 7 : bouton « Pour le web » dans la zone de dépose
 
 ### Point de contrôle C : terminé
 - [ ] Tous les critères des trois specs remplis

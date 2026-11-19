@@ -14424,6 +14424,26 @@
           }
         }
       }
+    },
+    "Pour le web": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For the web"
+          }
+        }
+      }
+    },
+    "Je n'ai pas réussi à préparer cette image.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I couldn't prepare this image."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
