@@ -335,6 +335,8 @@ final class YumiCore {
                 switch action {
                 case .takeBreak:   focus.takeBreak()
                 case .openSession: ClaudeTaskMirror.openSession()
+                case .openRoutine:
+                    NotificationCenter.default.post(name: .moduleAction, object: nil, userInfo: ["module": "routines", "action": "primary"])
                 }
             }), defaults: initiativeDefaults)
         // The chat answers through Claude Code: its module tells the folded island what it is doing.
@@ -347,7 +349,9 @@ final class YumiCore {
         #if APPSTORE
         let routines: [any YumiModule] = []
         #else
-        let routines: [any YumiModule] = [RoutinesModule()]
+        let routines: [any YumiModule] = [RoutinesModule(onTrouble: { [initiative] name, failed in
+            initiative.notice(.routine(name: name, failed: failed))
+        })]
         #endif
         modules = ModuleRegistry(
             modules: ([

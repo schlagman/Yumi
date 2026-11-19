@@ -14344,6 +14344,66 @@
           }
         }
       }
+    },
+    "La routine « %@ » a un souci. Tu regardes ?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The “%@” routine ran into a problem. Take a look?"
+          }
+        }
+      }
+    },
+    "Petit souci sur « %@ ». Son rapport le dit.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A small problem with “%@”. Its report says so."
+          }
+        }
+      }
+    },
+    "« %@ » a tourné, mais avec un souci.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” ran, but with a problem."
+          }
+        }
+      }
+    },
+    "La routine « %@ » n'a pas fini.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The “%@” routine didn't finish."
+          }
+        }
+      }
+    },
+    "« %@ » s'est arrêtée en route. Tu regardes ?": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” stopped halfway. Take a look?"
+          }
+        }
+      }
+    },
+    "Ta routine « %@ » est restée en plan.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your “%@” routine was left hanging."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

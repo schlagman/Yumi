@@ -27,6 +27,8 @@ enum Occasion: Equatable, Sendable {
     case mail(from: String, subject: String, count: Int)
     /// Today's screen time reached the daily threshold, or one more hour above it (minutes).
     case screenTime(minutes: Int, threshold: Int)
+    /// A scheduled task of the Claude app stopped before the end, or its report says something went wrong.
+    case routine(name: String, failed: Bool)
 
     /// The subject, for the rule about being ignored: one per kind of occasion.
     var topic: String {
@@ -42,6 +44,7 @@ enum Occasion: Equatable, Sendable {
         case .repository(let event, _): return "github.\(event.kind.rawValue)"
         case .mail: return "mail"
         case .screenTime: return "screenTime"
+        case .routine: return "routine"
         }
     }
 
@@ -51,7 +54,7 @@ enum Occasion: Equatable, Sendable {
         case .firstWake(let events, _): return (events ?? 0) > 0
         case .back(let finished, let waiting): return finished || waiting
         case .weekEnd: return false
-        case .longStretch, .agentDone, .meetingWhileAgentWaits, .late, .lowBattery, .repository, .mail, .screenTime: return true
+        case .longStretch, .agentDone, .meetingWhileAgentWaits, .late, .lowBattery, .repository, .mail, .screenTime, .routine: return true
         }
     }
 
@@ -80,6 +83,8 @@ enum RemarkAction: String, Codable, Sendable {
     case takeBreak
     /// Bring forward the application the agent's session runs in.
     case openSession
+    /// Open the run of the routine that went wrong (the Routines module's main button).
+    case openRoutine
 
     var label: String { self == .takeBreak ? loc("Pause") : loc("Voir") }
 }
@@ -299,6 +304,20 @@ enum InitiativePhrases {
                 Variant(key: "screen.over.1", text: loc("\(total) d'écran aujourd'hui. Toujours là ?"), mood: .worried, action: .takeBreak),
                 Variant(key: "screen.over.2", text: loc("Encore une heure de plus : \(total) d'écran aujourd'hui."), mood: .worried, action: .takeBreak),
                 Variant(key: "screen.over.3", text: loc("\(total) devant l'écran. Je dis ça pour tes yeux."), mood: .curious, action: .takeBreak),
+            ]
+
+        case .routine(let name, let failed):
+            if failed {
+                return [
+                    Variant(key: "routine.fail.1", text: loc("La routine « \(name) » a un souci. Tu regardes ?"), mood: .worried, action: .openRoutine),
+                    Variant(key: "routine.fail.2", text: loc("Petit souci sur « \(name) ». Son rapport le dit."), mood: .worried, action: .openRoutine),
+                    Variant(key: "routine.fail.3", text: loc("« \(name) » a tourné, mais avec un souci."), mood: .curious, action: .openRoutine),
+                ]
+            }
+            return [
+                Variant(key: "routine.stuck.1", text: loc("La routine « \(name) » n'a pas fini."), mood: .worried, action: .openRoutine),
+                Variant(key: "routine.stuck.2", text: loc("« \(name) » s'est arrêtée en route. Tu regardes ?"), mood: .curious, action: .openRoutine),
+                Variant(key: "routine.stuck.3", text: loc("Ta routine « \(name) » est restée en plan."), mood: .worried, action: .openRoutine),
             ]
 
         case .agentDone(let project, let minutes):

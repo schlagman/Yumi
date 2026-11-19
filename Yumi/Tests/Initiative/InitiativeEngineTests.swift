@@ -87,11 +87,21 @@ private func around(_ now: Date, talk: YumiTalk = .chatty, name: String? = "Este
         #expect(InitiativePhrases.projectName("Tu avances sur plusieurs choses") == nil)
     }
 
+    @Test func aRoutineThatWentWrong() {
+        for _ in 0..<6 {
+            let stuck = say(.routine(name: "Relevé hebdo", failed: false))
+            #expect(stuck?.text.contains("Relevé hebdo") == true)
+            #expect(stuck?.action == .openRoutine)
+            #expect(say(.routine(name: "Relevé hebdo", failed: true))?.text.contains("souci") == true)
+        }
+    }
+
     private var everyOccasion: [Occasion] {
         [.firstWake(events: 2, firstAt: at(10)), .firstWake(events: 0, firstAt: nil), .firstWake(events: nil, firstAt: nil),
          .back(agentFinished: true, agentWaiting: false), .back(agentFinished: false, agentWaiting: true), .back(agentFinished: false, agentWaiting: false), .longStretch(hours: 3),
          .agentDone(project: "yumi", minutes: 42), .meetingWhileAgentWaits(title: "Point produit", minutes: 5), .late,
-         .lowBattery(percent: 9), .weekEnd, .screenTime(minutes: 480, threshold: 480), .screenTime(minutes: 605, threshold: 480)]
+         .lowBattery(percent: 9), .weekEnd, .screenTime(minutes: 480, threshold: 480), .screenTime(minutes: 605, threshold: 480),
+         .routine(name: "Relevé hebdo", failed: false), .routine(name: "Relevé hebdo", failed: true)]
     }
 
     @Test func everySentenceIsInHisVoice() {

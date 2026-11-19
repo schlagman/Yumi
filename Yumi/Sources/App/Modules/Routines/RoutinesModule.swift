@@ -16,7 +16,7 @@ final class RoutinesModule: YumiModule {
     static var reportsFolder: URL { AppIdentity.supportDirectory.appendingPathComponent("Reports") }
 
     private let defaults: UserDefaults
-    private let onTrouble: (_ name: String, _ failed: Bool) -> Void
+    private let onTrouble: @MainActor (_ name: String, _ failed: Bool) -> Void
     private var routines: [Routine] = []
     /// The Claude app ids of the sessions waiting for the person right now.
     private var waiting: Set<String> = []
@@ -28,7 +28,7 @@ final class RoutinesModule: YumiModule {
     private var folderWatch: DispatchSourceFileSystemObject?
     private var observers: [NSObjectProtocol] = []
 
-    init(defaults: UserDefaults = .standard, onTrouble: @escaping (_ name: String, _ failed: Bool) -> Void = { _, _ in }) {
+    init(defaults: UserDefaults = .standard, onTrouble: @escaping @MainActor (_ name: String, _ failed: Bool) -> Void = { _, _ in }) {
         self.defaults = defaults
         self.onTrouble = onTrouble
     }

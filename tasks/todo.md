@@ -42,8 +42,8 @@ Commandes (depuis `Yumi/`) :
 **Description :** occasion `routine(name:failed:)` avec sa phrase, son sujet et le bouton « Ouvrir ». Le module la signale une seule fois par exécution, via une fermeture branchée sur `initiative.notice`.
 
 **Critères d'acceptation :**
-- [ ] Une exécution pas finie ou en échec donne une remarque, une seule fois.
-- [ ] Les refus existants s'appliquent (Focus, Ne pas déranger, 20 min entre deux remarques).
+- [x] Une exécution pas finie ou en échec donne une remarque, une seule fois.
+- [x] Les refus existants s'appliquent (Focus, Ne pas déranger, 20 min entre deux remarques).
 
 **Vérification :** test dans `Tests/Initiative/` ; build.
 **Dépendances :** tâche 2.
