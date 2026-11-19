@@ -16,6 +16,9 @@ enum EngineFactory {
             return AnthropicLLMProvider(model: settings.model(.anthropic) ?? "claude-sonnet-4-6", apiKey: key(.anthropic))
         case .openai:
             return OpenAILLMProvider(model: settings.model(.openai) ?? OpenAILLMProvider.defaultModel, apiKey: key(.openai))
+        case .groq:
+            return OpenAILLMProvider(model: settings.model(.groq) ?? OpenAILLMProvider.groqModel, apiKey: key(.groq),
+                                     endpoint: OpenAILLMProvider.groqEndpoint, label: "groq", reasoningRoom: 2048)
         case .gemini:
             return GeminiLLMProvider(model: settings.model(.gemini) ?? GeminiLLMProvider.defaultModel, apiKey: key(.gemini),
                                      remember: { model in
@@ -39,7 +42,7 @@ enum EngineFactory {
     static func isReady(_ engine: Engine, _ settings: EngineSettings) -> Bool {
         switch engine {
         case .claudeCode: hasClaudeCode
-        case .anthropic, .openai, .gemini: engine.keychainKey.flatMap { KeychainStore.shared.get($0)?.nonEmptyTrimmed } != nil
+        case .anthropic, .openai, .groq, .gemini: engine.keychainKey.flatMap { KeychainStore.shared.get($0)?.nonEmptyTrimmed } != nil
         case .ollama: settings.models[.ollama]?.nonEmptyTrimmed != nil
         case .apple: AppleModelAvailability.current.isAvailable
         case .simple: true

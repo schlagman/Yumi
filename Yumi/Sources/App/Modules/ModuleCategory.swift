@@ -1,17 +1,18 @@
 import Foundation
 
-/// The three tabs of the open island: where a module lives. A module says its own category
+/// The tabs of the open island: where a module lives. A module says its own category
 /// (`YumiModule.category`); one that says nothing goes where its identifier puts it, and an
 /// unknown module goes to "Journée", so a future module always has a place.
 enum ModuleCategory: String, CaseIterable, Sendable {
-    case work, day, relax
+    case work, day, relax, focus
 
-    /// "Travail", "Journée", "Détente".
+    /// "Travail", "Journée", "Détente", "Focus".
     var label: String {
         switch self {
         case .work:  return loc("Travail")
         case .day:   return loc("Journée")
         case .relax: return loc("Détente")
+        case .focus: return loc("Focus")
         }
     }
 
@@ -20,7 +21,9 @@ enum ModuleCategory: String, CaseIterable, Sendable {
         switch id {
         case "claude-code", "github", "notion", "tasks", "taches": return .work
         case "agenda", "weather", "meteo", "notes", "gmail", "screen-time": return .day
-        case "music", "musique", "focus":                          return .relax
+        case "music", "musique":                                   return .relax
+        // On its own: nothing else on screen while the timer runs
+        case "focus":                                              return .focus
         default:                                                   return .day
         }
     }

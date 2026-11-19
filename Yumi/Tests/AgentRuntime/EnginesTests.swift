@@ -66,6 +66,22 @@ private func providers(answering text: String, wire: Wire) -> [any LLMProvider] 
         #expect(roles == ["system", "user"])
     }
 
+    @Test func groqIsOpenAIAtItsOwnAddress() async throws {
+        let wire = Wire()
+        let provider = OpenAILLMProvider(model: OpenAILLMProvider.groqModel, apiKey: { "gsk-groq" },
+                                         transport: reply(200, openAIAnswer("{}"), wire: wire),
+                                         endpoint: OpenAILLMProvider.groqEndpoint, label: "groq", reasoningRoom: 2048)
+        #expect(try await provider.complete(request).text == "{}")
+        let sent = try #require(wire.last)
+        #expect(sent.url?.absoluteString == "https://api.groq.com/openai/v1/chat/completions")
+        #expect(sent.value(forHTTPHeaderField: "authorization") == "Bearer gsk-groq")
+        #expect(wire.body?["model"] as? String == "llama-3.3-70b-versatile")
+        // The request's 500 tokens, plus room for a model that thinks first
+        #expect(wire.body?["max_completion_tokens"] as? Int == 2548)
+        #expect(provider.name == "groq:llama-3.3-70b-versatile")
+        #expect(Engine.groq.keychainKey == "groq-api-key" && Engine.groq.defaultModel == OpenAILLMProvider.groqModel)
+    }
+
     @Test func geminiKeepsTheKeyOutOfTheURL() async throws {
         let wire = Wire()
         let provider = GeminiLLMProvider(apiKey: { "gm-key" }, transport: reply(200, geminiAnswer("{}"), wire: wire))
@@ -179,12 +195,12 @@ private func providers(answering text: String, wire: Wire) -> [any LLMProvider] 
 
 @Suite struct EngineSettingsTests {
     @Test func automaticTriesEveryEngineInOrder() {
-        #expect(EngineSettings().sequence == [.claudeCode, .anthropic, .openai, .gemini, .ollama, .apple, .simple])
+        #expect(EngineSettings().sequence == [.claudeCode, .anthropic, .openai, .groq, .gemini, .ollama, .apple, .simple])
         var settings = EngineSettings(order: [.ollama, .gemini])
-        #expect(settings.sequence == [.ollama, .gemini, .claudeCode, .anthropic, .openai, .apple, .simple])
+        #expect(settings.sequence == [.ollama, .gemini, .claudeCode, .anthropic, .openai, .groq, .apple, .simple])
         settings.choice = .gemini
         #expect(settings.sequence == [.gemini])
-        #expect(EngineSettings.normalised([.openai, .openai, .claudeCode]) == [.openai, .claudeCode, .anthropic, .gemini, .ollama, .apple, .simple])
+        #expect(EngineSettings.normalised([.openai, .openai, .claudeCode]) == [.openai, .claudeCode, .anthropic, .groq, .gemini, .ollama, .apple, .simple])
     }
 
     @Test func savedAndReadBack() throws {
@@ -216,7 +232,7 @@ private func providers(answering text: String, wire: Wire) -> [any LLMProvider] 
         let wire = Wire()
         let make: @Sendable (Engine, EngineSettings) -> (any LLMProvider)? = { engine, _ in
             switch engine {
-            case .claudeCode, .apple, .simple: nil // not in this build
+            case .claudeCode, .groq, .apple, .simple: nil // not in this build
             case .anthropic: AnthropicLLMProvider(model: "m", apiKey: { nil })
             case .openai: OpenAILLMProvider(apiKey: { nil }, transport: reply(200, "", wire: wire))
             case .gemini: GeminiLLMProvider(apiKey: { "g" }, transport: reply(200, geminiAnswer("from gemini"), wire: wire))

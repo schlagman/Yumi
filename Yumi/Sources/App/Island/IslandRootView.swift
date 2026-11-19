@@ -56,7 +56,7 @@ struct IslandScene: View {
             && model.selectedModule(in: state.modules)?.id == IslandModel.agentModuleID ? .working : resolved
         // The open island is as wide as its tab or its view asks, never narrower than the notch allows
         let notchUnits = layout.hasNotch ? layout.notchWidth / IslandConst.openScale : 0
-        let openUnits = IslandOpenLayer.widthKind(for: screen, category: model.category).width(notch: notchUnits)
+        let openUnits = IslandOpenLayer.widthKind(for: screen, category: model.category).width(notch: notchUnits, tabs: model.tabs(modules: state.modules).count)
         let accent = (IslandAccent(rawValue: accentName) ?? .yumi).color
         let border: Color? = stage == .open
             ? (screen == .alert ? IslandTheme.amber : accent.opacity(0.7))

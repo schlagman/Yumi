@@ -35,6 +35,10 @@ struct ModuleSnapshot: Identifiable, Equatable, Sendable {
     var secondarySymbol: String? = nil
     /// A bar the activity view can draw: a track playing, a timer running. nil without one.
     var progress: ModuleProgress? = nil
+    /// A small picture the tile can show in place of its icon: the cover of a track. nil without one.
+    var artwork: Data? = nil
+    /// Lyrics of the track playing: the line sung now, then the next ones. Empty for most modules.
+    var lyrics: [String] = []
     /// Lines the activity view lists under the headline: one Claude Code session each, one pull
     /// request or one GitHub event each. Already in the order to show. Empty for most modules.
     var rows: [ModuleRow] = []
@@ -164,4 +168,7 @@ extension Notification.Name {
     /// Posted by the first launch with the modules of the profiles the person chose.
     /// userInfo: ["modules": [String]]. Applied only while the modules were never chosen.
     static let profilesChosen = AppIdentity.notification("profilesChosen")
+    /// Posted by the lock screen when its playback bar is moved.
+    /// userInfo: ["fraction": Double (0 to 1, of the track's length)]
+    static let musicSeek = AppIdentity.notification("musicSeek")
 }

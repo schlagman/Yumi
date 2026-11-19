@@ -64,6 +64,10 @@ struct ModulesSettings: View {
                 .id("module-settings-agenda")
             ScreenTimeSettingsSection()
                 .id("module-settings-screen-time")
+            MusicSettingsSection()
+                .id("module-settings-music")
+            GoogleTasksSection()
+                .id("module-settings-notes")
         }
         }
     }
@@ -242,6 +246,76 @@ private struct ContributionsSection: View {
             Text("Contributions")
         } footer: {
             SettingsHelp(loc("Comme sur ton profil GitHub. Je les relis au plus toutes les trente minutes."))
+        }
+    }
+}
+
+/// Music: the lyrics, asked to LRCLIB only once turned on.
+private struct MusicSettingsSection: View {
+    @AppStorage(Lyrics.enabledKey) private var lyrics = false
+
+    var body: some View {
+        Section {
+            Toggle(loc("Afficher les paroles"), isOn: $lyrics)
+        } header: {
+            Text("Musique")
+        } footer: {
+            SettingsHelp(loc("Les paroles synchronisées viennent de LRCLIB (lrclib.net), gratuit et sans compte : je ne lui envoie que le titre et l'artiste du morceau. Musique et Spotify disent où en est le morceau ; pour YouTube et YouTube Music, je compte depuis le début du morceau, les paroles peuvent avoir un peu d'avance ou de retard. Dès le prochain morceau."))
+        }
+    }
+}
+
+/// Notes: Google Tasks, through an OAuth client of the person's own (no administrator needed).
+private struct GoogleTasksSection: View {
+    @State private var clientID = KeychainStore.shared.get(GoogleTasks.clientIDKey) ?? ""
+    @State private var secret = KeychainStore.shared.get(GoogleTasks.clientSecretKey) ?? ""
+    @State private var connected = KeychainStore.shared.get(GoogleTasks.refreshTokenKey)?.isEmpty == false
+    @State private var waiting = false
+    @State private var status: String?
+
+    var body: some View {
+        Section {
+            if connected {
+                LabeledContent("Google Tasks") { Text(loc("Connecté")).foregroundStyle(.secondary) }
+                Button(loc("Se déconnecter")) {
+                    KeychainStore.shared.remove(GoogleTasks.refreshTokenKey)
+                    connected = false
+                }
+            } else {
+                TextField(loc("ID client OAuth"), text: $clientID)
+                SecureField(loc("Code secret du client"), text: $secret)
+                HStack {
+                    Button(waiting ? loc("En attente du navigateur…") : loc("Se connecter à Google")) { connect() }
+                        .disabled(waiting || clientID.nonEmptyTrimmed == nil || secret.nonEmptyTrimmed == nil)
+                    if let status { Text(status).foregroundStyle(.secondary).lineLimit(2) }
+                }
+            }
+        } header: {
+            Text("Google Tasks")
+        } footer: {
+            SettingsHelp(loc("Chaque note que tu gardes avec Yumi devient aussi une tâche de ta liste Google Tasks, et « Tout voir » l'ouvre. Il faut un ID client OAuth à toi (console Google Cloud, type Application de bureau, Google Tasks API activée) : l'ID et le code secret restent dans le trousseau du Mac."))
+        }
+    }
+
+    private func connect() {
+        let id = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        KeychainStore.shared.set(GoogleTasks.clientIDKey, value: id)
+        KeychainStore.shared.set(GoogleTasks.clientSecretKey, value: key)
+        waiting = true
+        status = nil
+        Task {
+            do {
+                KeychainStore.shared.set(GoogleTasks.refreshTokenKey, value: try await GoogleTasks.signIn(clientID: id, clientSecret: key))
+                connected = true
+            } catch GoogleTasks.Failure.refused(let word) {
+                status = loc("Refusé par Google : \(word).")
+            } catch GoogleTasks.Failure.timedOut {
+                status = loc("Pas de retour du navigateur.")
+            } catch {
+                status = loc("La connexion n'a pas abouti.")
+            }
+            waiting = false
         }
     }
 }

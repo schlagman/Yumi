@@ -46,6 +46,7 @@ import Foundation
         #expect(TitlePlayback.isAudible("com.google.Chrome.app.cinhimbnkkaeohfgghhklpknlkffjgod", among: ["com.google.chrome.helper"]))
         #expect(TitlePlayback.isAudible("com.apple.Safari", among: ["com.apple.webkit.gpu"]))
         #expect(TitlePlayback.isAudible("org.mozilla.firefox", among: ["org.mozilla.plugincontainer"]))
+        #expect(TitlePlayback.isAudible("company.thebrowser.dia", among: ["company.thebrowser.browser.helper"]))
         // A prefix that is not a helper does not count
         #expect(!TitlePlayback.isAudible("com.brave.Browser", among: ["com.brave.browserextra"]))
         #expect(!TitlePlayback.isAudible("com.google.Chrome", among: []))

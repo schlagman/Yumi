@@ -70,6 +70,10 @@ final class KeychainStore: @unchecked Sendable {
         // Not "notion-api-key": that old name is erased once at launch.
         "notion-integration-key",
         "gmail-app-password",
+        // Google Tasks: the person's own OAuth client, and the refresh token.
+        "google-tasks-client-id",
+        "google-tasks-client-secret",
+        "google-tasks-refresh-token",
     ]
 
     /// Keys of the old integrations, removed from Yumi: erased once.
@@ -98,13 +102,23 @@ final class KeychainStore: @unchecked Sendable {
         Keychain.save(key: key, value: value)
     }
 
+    /// Keys of Google Keep, given up for Google Tasks (Google opens Keep only to a service account
+    /// of the domain): erased once, the service account's private key above all.
+    static let keepKeys = ["google-keep-client-id", "google-keep-client-secret", "google-keep-refresh-token",
+                           "google-keep-service-account", "google-keep-private-key", "google-keep-user"]
+
     /// Erases the retired keys from the Keychain, once (a flag in the defaults remembers it).
     func eraseRetiredKeys(defaults: UserDefaults = .standard) {
-        let done = "retiredKeysErased"
-        guard LaunchPlan.current.keychain, !defaults.bool(forKey: done) else { return }
-        for key in Self.retiredKeys { Keychain.delete(key: key) }
-        for key in ["vercelProjectFilter", "n8nWorkflowFilter", "activeIntegrations"] { defaults.removeObject(forKey: key) }
-        defaults.set(true, forKey: done)
+        guard LaunchPlan.current.keychain else { return }
+        if !defaults.bool(forKey: "retiredKeysErased") {
+            for key in Self.retiredKeys { Keychain.delete(key: key) }
+            for key in ["vercelProjectFilter", "n8nWorkflowFilter", "activeIntegrations"] { defaults.removeObject(forKey: key) }
+            defaults.set(true, forKey: "retiredKeysErased")
+        }
+        if !defaults.bool(forKey: "keepKeysErased") {
+            for key in Self.keepKeys { Keychain.delete(key: key) }
+            defaults.set(true, forKey: "keepKeysErased")
+        }
     }
 
     /// Removes from cache + Keychain only if the key was previously set.
@@ -215,7 +229,7 @@ final class ClaudeService {
             case .simple:
                 await answerSimply(state: state)
                 return
-            case .openai, .gemini, .ollama, .apple:
+            case .openai, .groq, .gemini, .ollama, .apple:
                 if let provider = EngineFactory.provider(engine, settings),
                    await chatWithProvider(provider, engine: engine, query: query, context: context, state: state) {
                     return

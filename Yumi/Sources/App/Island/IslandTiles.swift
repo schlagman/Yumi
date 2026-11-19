@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // What each module shows in its tile of the bento: real elements at a glance (the contribution
@@ -165,6 +166,31 @@ private struct MusicTile: View {
     private var playing: Bool { module.live.map { $0.priority >= ModuleLivePriority.activity } ?? false }
 
     var body: some View {
+        if large, !module.lyrics.isEmpty {
+            // Alone in its tab, the tile is wide enough for the lyrics beside the player
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 16) {
+                    player(lyrics: 0).frame(width: 210)
+                    lyrics(module.lyrics)
+                        .frame(minWidth: 0, idealWidth: 180, maxWidth: .infinity, alignment: .leading)
+                }
+                player(lyrics: 2)
+            }
+        } else {
+            player(lyrics: large ? 2 : 0)
+        }
+    }
+
+    /// The line sung now, then the next ones, fainter.
+    private func lyrics(_ lines: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Headline(text: lines[0], size: 13, lines: 2)
+            ForEach(Array(lines.dropFirst().enumerated()), id: \.offset) { Faint(text: $0.element) }
+        }
+    }
+
+    /// The cover and the titles, `count` lines of lyrics under them, the bar and the buttons.
+    private func player(lyrics count: Int) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -172,15 +198,21 @@ private struct MusicTile: View {
                                           center: .center))
                     .frame(width: large ? 54 : 40, height: large ? 54 : 40)
                     .overlay {
-                        if playing { WaveBars(color: .white) } else {
+                        if let cover = module.artwork.flatMap(NSImage.init(data:)) {
+                            Image(nsImage: cover).resizable().aspectRatio(contentMode: .fill)
+                        } else if playing { WaveBars(color: .white) } else {
                             Image(systemName: "music.note").font(.system(size: 15, weight: .bold)).foregroundStyle(.white)
                         }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     .shadow(color: Color(hex: "#F58AD9").opacity(0.3), radius: 8, y: 3)
                 VStack(alignment: .leading, spacing: 2) {
                     Headline(text: module.title, size: large ? 14 : 12.5)
                     Faint(text: module.subtitle)
                 }
+            }
+            if count > 0, !module.lyrics.isEmpty {
+                lyrics(Array(module.lyrics.prefix(count)))
             }
             if let progress = module.progress {
                 ProgressLine(fraction: progress.fraction, color: .white)

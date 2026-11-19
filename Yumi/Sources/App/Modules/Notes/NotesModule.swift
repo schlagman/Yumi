@@ -14,13 +14,22 @@ final class NotesModule: YumiModule {
     private var onChange: (@MainActor () -> Void)?
     private var storeObserver: NSObjectProtocol?
     private var refreshing: Task<Void, Never>?
+    /// Google Tasks' credentials, once connected in the settings (read from the Keychain by the app).
+    private let tasks: @MainActor () -> GoogleTasks.Credentials?
+    /// Why the last note did not reach Google Tasks; nil once one does.
+    private var tasksProblem: String?
 
-    init(store: NotesStore = NotesStore(fileURL: AppIdentity.supportDirectory.appendingPathComponent("notes.txt"))) {
+    init(store: NotesStore = NotesStore(fileURL: AppIdentity.supportDirectory.appendingPathComponent("notes.txt")),
+         tasks: @escaping @MainActor () -> GoogleTasks.Credentials? = { nil }) {
         self.store = store
+        self.tasks = tasks
     }
 
     var snapshot: ModuleSnapshot {
-        NotesSummary.snapshot(notes: notes, reminders: reminders, remindersAccess: access, now: Date())
+        var snapshot = NotesSummary.snapshot(notes: notes, reminders: reminders, remindersAccess: access, now: Date())
+        // A note Google Tasks did not take stays here, and the island says so (unless a reminder has the stage)
+        if let tasksProblem, reminders.isEmpty { snapshot.subtitle = tasksProblem }
+        return snapshot
     }
 
     /// On, but macOS does not let Yumi read the reminders.
@@ -82,18 +91,38 @@ final class NotesModule: YumiModule {
                 complete(featured)
             } else if let text = NSPasteboard.general.string(forType: .string), store.add(text) != nil {
                 notes = store.load()
+                sendToTasks(text)
             }
         case .secondary:
             if access == .notDetermined {
                 requestAccess()
             } else if featured != nil {
                 openReminders()
+            } else if tasks() != nil {
+                NSWorkspace.shared.open(GoogleTasks.webURL)
             } else {
                 store.ensureFileExists()
                 NSWorkspace.shared.open(store.fileURL)
             }
         case .previous:
             break
+        }
+    }
+
+    /// The note goes to Google Tasks whole (the file keeps one capped line), once Tasks is connected.
+    private func sendToTasks(_ text: String) {
+        guard let credentials = tasks() else { return }
+        let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task { [weak self] in
+            do {
+                try await GoogleTasks.add(note, with: credentials)
+                self?.tasksProblem = nil
+            } catch {
+                let why: String
+                if case GoogleTasks.Failure.refused(let word)? = error as? GoogleTasks.Failure { why = word } else { why = loc("pas de réponse") }
+                self?.tasksProblem = loc("Gardée ici, Google Tasks ne l'a pas prise (\(why)).")
+            }
+            self?.onChange?()
         }
     }
 
