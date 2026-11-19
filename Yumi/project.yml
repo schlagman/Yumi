@@ -101,6 +101,21 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MACOSX_DEPLOYMENT_TARGET: "15.0"
         ENABLE_SANDBOX: NO
+    # What macOS shows as playing, cover included, is read by a small library that /usr/bin/perl
+    # loads (Modules/Music/SystemNowPlaying.swift): built here, next to the app, never linked to it.
+    postCompileScripts:
+      - name: Build the Now Playing reader
+        inputFiles:
+          - $(SRCROOT)/NowPlaying/YumiNowPlaying.m
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(FRAMEWORKS_FOLDER_PATH)/YumiNowPlaying.dylib
+        script: |
+          set -e
+          mkdir -p "$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
+          archs=""
+          for arch in $ARCHS; do archs="$archs -arch $arch"; done
+          xcrun clang -dynamiclib -fobjc-arc $archs -isysroot "$SDKROOT" -mmacosx-version-min="$MACOSX_DEPLOYMENT_TARGET" \
+            -framework Foundation -o "$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH/YumiNowPlaying.dylib" "$SRCROOT/NowPlaying/YumiNowPlaying.m"
 
   YumiAppStore:
     type: application

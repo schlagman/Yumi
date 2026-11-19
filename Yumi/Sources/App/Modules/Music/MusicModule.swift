@@ -88,8 +88,9 @@ final class MusicModule: YumiModule {
     #if !APPSTORE
     private let nowPlayingWatch = SystemNowPlaying.Watch()
     #endif
-    /// The tab address the cover was looked for from.
+    /// The tab address the cover was looked for from, or the cover macOS gave for it.
     private var artworkFrom: String?
+    private var systemArtworkShown: Data?
     /// The browsers asked for their tabs right now, and those that refused Yumi.
     private var askingTabs: Set<String> = []
     private var tabsRefused: Set<String> = []
@@ -202,8 +203,8 @@ final class MusicModule: YumiModule {
         for player in Set(titled.keys).subtracting(found.keys) { receive(.stopped(player)) }
         for (_, track) in found where titled[track.player] != track { receive(.track(track)) }
         titled = found
-        // The tab went on to another song after the cover was looked for: look again
-        if let playing, let tab = tabOf[playing.player], tab.address != artworkFrom { fetchArtwork(playing) }
+        // The cover macOS gives, else the tab's once it went on to another song
+        if !showSystemArtwork(), let playing, let tab = tabOf[playing.player], tab.address != artworkFrom { fetchArtwork(playing) }
     }
 
     private static func windowTitles(of pid: pid_t) -> [String] {
@@ -216,6 +217,19 @@ final class MusicModule: YumiModule {
             guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title) == .success else { return nil }
             return title as? String
         }
+    }
+
+    /// Shows the cover macOS gave with the track it says Dia plays. False when it gave none for it.
+    @discardableResult
+    private func showSystemArtwork() -> Bool {
+        guard let playing, let browser = titledIn[playing.player], BrowserTab.browsers.contains(browser),
+              let system = systemNowPlaying, system.isFrom(browser), system.title?.nonEmptyTrimmed == playing.title,
+              let cover = system.artwork else { return false }
+        guard cover != systemArtworkShown else { return true }
+        systemArtworkShown = cover
+        artwork = MusicArtwork.thumbnail(cover)
+        onChange?()
+        return true
     }
 
     /// Asks `browser` for its YouTube tabs, for the next look. The first time may show the
@@ -246,6 +260,9 @@ final class MusicModule: YumiModule {
     private func watchNowPlaying() {
         nowPlayingWatch.start { [weak self] now in
             guard let self, self.titleWatch != nil else { return }
+            var now = now
+            // macOS gives the same song a moment without its cover: keep it, no blink
+            if now?.artwork == nil, let previous = self.systemNowPlaying, previous.title == now?.title { now?.artwork = previous.artwork }
             self.systemNowPlaying = now
             self.lookAtTitles()
         }
@@ -280,6 +297,7 @@ final class MusicModule: YumiModule {
         #endif
         systemNowPlaying = nil
         artworkFrom = nil
+        systemArtworkShown = nil
         tabOf = [:]
         if let seekObserver { NotificationCenter.default.removeObserver(seekObserver) }
         seekObserver = nil
@@ -310,6 +328,7 @@ final class MusicModule: YumiModule {
     /// Another track, or none: its cover and its lyrics are asked again.
     private func trackChanged() {
         artwork = nil
+        systemArtworkShown = nil
         lyrics = []
         guard let playing else { return }
         #if !APPSTORE
@@ -344,7 +363,8 @@ final class MusicModule: YumiModule {
         case .music:   script = "tell application id \"com.apple.Music\" to get raw data of artwork 1 of current track"
         case .spotify: script = "tell application id \"com.spotify.client\" to get artwork url of current track"
         case .youtube, .youtubeMusic:
-            // Read from the tab: its address, and maybe its cover, are already known
+            if showSystemArtwork() { return }
+            // Read from the tab: its address is already known
             if let tab = tabOf[track.player] {
                 // The tab still shows the song before: its cover comes once it moves on
                 guard tab.address != artworkFrom else { return }

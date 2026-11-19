@@ -22,10 +22,15 @@ import Foundation
         #expect(helper.isFrom("company.thebrowser.dia"))
     }
 
-    @Test func theWatchEndsWithYumi() {
-        // Each change is one line, and the loop stops once Yumi is gone (its parent becomes launchd)
-        #expect(SystemNowPlaying.watchScript.contains("line + '\\n'"))
-        #expect(SystemNowPlaying.watchScript.contains("while ($.getppid() !== 1)"))
+    @Test func perlRunsTheLibrarysWatch() {
+        #expect(SystemNowPlaying.perlLoader.contains("dl_load_file($ARGV[0], 0)"))
+        #expect(SystemNowPlaying.perlLoader.contains("'yumi_now_playing_watch'"))
+    }
+
+    @Test func theCoverComesAsBase64() throws {
+        let line = #"{"bundle":"company.thebrowser.dia","parent":null,"playing":true,"title":"Lueur","artist":null,"album":null,"duration":null,"elapsed":null,"timestamp":null,"artwork":"/9j/4A=="}"#
+        #expect(try #require(SystemNowPlaying.parse(line)).artwork == Data([0xFF, 0xD8, 0xFF, 0xE0]))
+        #expect(SystemNowPlaying.parse(line.replacingOccurrences(of: #""/9j/4A==""#, with: "null"))?.artwork == nil)
     }
 
     @Test func movesWithADotWhateverTheLanguage() {
