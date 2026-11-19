@@ -57,6 +57,12 @@ final class MusicModule: YumiModule {
         }
         #if !APPSTORE
         watchTitles()
+        seekObserver = NotificationCenter.default.addObserver(forName: .musicSeek, object: nil, queue: .main) { [weak self] note in
+            let fraction = note.userInfo?["fraction"] as? Double
+            MainActor.assumeIsolated {
+                if let fraction { self?.seek(to: fraction) }
+            }
+        }
         #endif
     }
 
@@ -75,6 +81,15 @@ final class MusicModule: YumiModule {
     private var webBrowser: String?
     /// The app each player was read in at the last look (a browser, Deezer), to ask it for the cover.
     private var titledIn: [MusicPlayer: String] = [:]
+    /// The YouTube tabs of the browsers in `BrowserTab.browsers`, from their last answer.
+    private var browserTabs: [String: [BrowserTab]] = [:]
+    private var tabsSeenAt: [String: Date] = [:]
+    /// The browsers asked for their tabs right now, and those that refused Yumi.
+    private var askingTabs: Set<String> = []
+    private var tabsRefused: Set<String> = []
+    /// The tab each player was read from at the last look, for its cover and to move in its video.
+    private var tabOf: [MusicPlayer: BrowserTab] = [:]
+    private var seekObserver: NSObjectProtocol?
 
     #if !APPSTORE
     /// Every three seconds, the titles of the windows of Deezer, YouTube Music and the browsers:
@@ -101,6 +116,7 @@ final class MusicModule: YumiModule {
         let now = Date()
         // The browsers showing no known site, in case one of them is playing
         var unknowns: [(id: String, name: String, titles: [String])] = []
+        var foundTabs: [MusicPlayer: BrowserTab] = [:]
         for app in NSWorkspace.shared.runningApplications where app.activationPolicy == .regular {
             let name = app.localizedName ?? ""
             let id = app.bundleIdentifier ?? ""
@@ -110,6 +126,33 @@ final class MusicModule: YumiModule {
                     || name.localizedCaseInsensitiveContains("Deezer") || name.localizedCaseInsensitiveContains("YouTube Music") else { continue }
             let titles = Self.windowTitles(of: app.processIdentifier)
             var knownSite = false
+            if BrowserTab.browsers.contains(id) {
+                if audible == nil { audible = .some(AudioActivity.audibleBundleIDs()) }
+                let sound = (audible ?? nil).map { TitlePlayback.isAudible(id, among: $0) }
+                // Asked while it plays, and while a track of its tabs is shown, to see it pause or close
+                if sound == true || tabOf.keys.contains(where: { titledIn[$0] == id }) { askTabs(of: id) }
+                let age = tabsSeenAt[id].map { now.timeIntervalSince($0) } ?? 0
+                for tab in browserTabs[id] ?? [] {
+                    guard let track = MusicTitles.parse(tab.title, appName: name) else { continue }
+                    knownSite = true
+                    guard found[track.player] == nil else { continue }
+                    let isPlaying: Bool?
+                    if let paused = tab.paused {
+                        // A paused video is shown only once seen playing: an open page never started is not a track
+                        isPlaying = !paused ? true : (titled[track.player]?.title == track.title ? false : nil)
+                    } else {
+                        let pressed = pressedAt[track.player].map { now.timeIntervalSince($0) < Self.pressTrust } ?? false
+                        isPlaying = TitlePlayback.isPlaying(title: track.title, previous: titled[track.player], audible: sound, pressedRecently: pressed)
+                    }
+                    guard let isPlaying else { continue }
+                    // The answer is up to a look old: the video went on meanwhile
+                    let position = tab.position.map { $0 + (isPlaying ? age : 0) }
+                    found[track.player] = NowPlaying(player: track.player, title: track.title, artist: track.artist, album: "",
+                                                     isPlaying: isPlaying, duration: tab.duration, position: position)
+                    foundIn[track.player] = id
+                    foundTabs[track.player] = tab
+                }
+            }
             for title in titles {
                 guard let track = MusicTitles.parse(title, appName: name) else { continue }
                 knownSite = true
@@ -146,6 +189,7 @@ final class MusicModule: YumiModule {
         }
         heardBrowsers = heard
         titledIn = foundIn
+        tabOf = foundTabs
         for player in Set(titled.keys).subtracting(found.keys) { receive(.stopped(player)) }
         for (_, track) in found where titled[track.player] != track { receive(.track(track)) }
         titled = found
@@ -160,6 +204,26 @@ final class MusicModule: YumiModule {
             var title: CFTypeRef?
             guard AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &title) == .success else { return nil }
             return title as? String
+        }
+    }
+
+    /// Asks `browser` for its YouTube tabs, for the next look. The first time may show the
+    /// system's Automation dialog; refused, it is not asked again until Yumi restarts.
+    private func askTabs(of browser: String) {
+        guard !askingTabs.contains(browser), !tabsRefused.contains(browser), let script = BrowserTab.script(browser: browser) else { return }
+        askingTabs.insert(browser)
+        PlayerScripting.run(script, on: .youtube, askingFirst: true) { [weak self] result in
+            Task { @MainActor in
+                guard let self else { return }
+                self.askingTabs.remove(browser)
+                switch result {
+                case .success(let answer):
+                    self.browserTabs[browser] = BrowserTab.parse(answer.text)
+                    self.tabsSeenAt[browser] = Date()
+                case .failure(.notAllowed): self.tabsRefused.insert(browser); self.browserTabs[browser] = nil
+                case .failure: self.browserTabs[browser] = nil
+                }
+            }
         }
     }
 
@@ -186,6 +250,11 @@ final class MusicModule: YumiModule {
         heardBrowsers = []
         webBrowser = nil
         titledIn = [:]
+        browserTabs = [:]
+        tabsSeenAt = [:]
+        tabOf = [:]
+        if let seekObserver { NotificationCenter.default.removeObserver(seekObserver) }
+        seekObserver = nil
         artwork = nil
         lyrics = []
         playing = nil
@@ -247,6 +316,17 @@ final class MusicModule: YumiModule {
         case .music:   script = "tell application id \"com.apple.Music\" to get raw data of artwork 1 of current track"
         case .spotify: script = "tell application id \"com.spotify.client\" to get artwork url of current track"
         case .youtube, .youtubeMusic:
+            // Read from the tab: its address, and maybe its cover, are already known
+            if let tab = tabOf[track.player] {
+                guard let url = tab.artwork ?? MusicArtwork.imageURL(from: tab.address, player: track.player) else { return }
+                Task { @MainActor [weak self] in
+                    guard let download = try? await URLSession.shared.data(from: url) else { return }
+                    guard let self, self.playing?.isSameTrack(as: track) == true, let small = MusicArtwork.thumbnail(download.0) else { return }
+                    self.artwork = small
+                    self.onChange?()
+                }
+                return
+            }
             guard let browser = titledIn[track.player], let tab = MusicArtwork.tabScript(browser: browser, title: track.title) else { return }
             script = tab
         default: return
@@ -334,6 +414,31 @@ final class MusicModule: YumiModule {
         }
         #endif
     }
+
+    #if !APPSTORE
+    /// Moves in the track, to `fraction` of its length: Music and Spotify through AppleScript, a
+    /// YouTube tab through the JavaScript its browser runs. Nothing for a track of unknown length.
+    private func seek(to fraction: Double) {
+        guard Self.canControl, let playing, let duration = playing.duration, duration > 0 else { return }
+        let seconds = min(max(fraction, 0), 1) * duration
+        let script: String
+        if playing.player.isScriptable {
+            script = "tell application id \"\(playing.player.rawValue)\" to set player position to \(Int(seconds))"
+        } else if let browser = titledIn[playing.player], let tab = tabOf[playing.player],
+                  let move = BrowserTab.seekScript(browser: browser, address: tab.address, to: seconds) {
+            script = move
+            // Until the tab answers again, its last answer says the new place
+            if let index = browserTabs[browser]?.firstIndex(where: { $0.address == tab.address }) { browserTabs[browser]?[index].position = seconds }
+            tabsSeenAt[browser] = Date()
+        } else {
+            return
+        }
+        PlayerScripting.run(script, on: playing.player, askingFirst: true) { _ in }
+        // The bar goes there at once, without waiting for the player to say so
+        clock = PlaybackClock(position: seconds, since: Date(), isRunning: playing.isPlaying)
+        onChange?()
+    }
+    #endif
 
     /// What the agent asks (`control_music`), with the module's own buttons. nil when done,
     /// otherwise why not. With nothing playing, « play » opens the player.

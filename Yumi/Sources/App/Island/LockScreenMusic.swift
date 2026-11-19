@@ -87,6 +87,8 @@ private struct LockScreenSpace {
 /// paused a moment ago. Its buttons press the same actions as the island's.
 private struct LockScreenMusicView: View {
     @ObservedObject var state: AppState
+    /// Where the finger is on the playback bar, while it moves it.
+    @State private var dragging: Double?
 
     var body: some View {
         VStack(spacing: 14) {
@@ -137,13 +139,29 @@ private struct LockScreenMusicView: View {
             if let progress = music.progress {
                 VStack(spacing: 4) {
                     GeometryReader { geometry in
+                        let fraction = dragging ?? min(max(progress.fraction, 0), 1)
                         ZStack(alignment: .leading) {
                             Capsule().fill(Color.white.opacity(0.25))
                             Capsule().fill(Color.white.opacity(0.9))
-                                .frame(width: geometry.size.width * min(max(progress.fraction, 0), 1))
+                                .frame(width: geometry.size.width * fraction)
                         }
+                        .frame(height: dragging == nil ? 4 : 7)
+                        .frame(maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        // A click or a drag along the bar moves in the track, once the finger is lifted
+                        .gesture(DragGesture(minimumDistance: 0)
+                            .onChanged { dragging = min(max($0.location.x / geometry.size.width, 0), 1) }
+                            .onEnded { value in
+                                let fraction = min(max(value.location.x / geometry.size.width, 0), 1)
+                                NotificationCenter.default.post(name: .musicSeek, object: nil, userInfo: ["fraction": fraction])
+                                dragging = nil
+                            })
+                        .animation(.easeOut(duration: 0.15), value: dragging == nil)
                     }
-                    .frame(height: 4)
+                    .frame(height: 16)
+                    .accessibilityElement()
+                    .accessibilityLabel(loc("Position dans le morceau"))
+                    .accessibilityValue(progress.leading)
                     HStack {
                         Text(verbatim: progress.leading)
                         Spacer()

@@ -165,4 +165,7 @@ extension Notification.Name {
     /// Posted by the island when a line of a module's list is clicked.
     /// userInfo: ["module": String (module id), "row": String (the row's `action`)]
     static let moduleRowAction = AppIdentity.notification("moduleRowAction")
+    /// Posted by the lock screen when its playback bar is moved.
+    /// userInfo: ["fraction": Double (0 to 1, of the track's length)]
+    static let musicSeek = AppIdentity.notification("musicSeek")
 }
