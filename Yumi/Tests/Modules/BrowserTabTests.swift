@@ -5,6 +5,10 @@ import Foundation
     @Test func asksDiaOnlyForItsYouTubeTabs() throws {
         let script = try #require(BrowserTab.script(browser: "company.thebrowser.dia"))
         #expect(script.contains("tell application id \"company.thebrowser.dia\"") && script.contains("contains \"youtube.com/\""))
+        // Inside the browser's block, `tab` is its tab class, not the character: named before it
+        let block = try #require(script.range(of: "tell application"))
+        #expect(script[..<block.lowerBound].contains("set separator to tab"))
+        #expect(!script[block.lowerBound...].contains("& tab &"))
         #expect(BrowserTab.script(browser: "com.google.Chrome") == nil)
     }
 
