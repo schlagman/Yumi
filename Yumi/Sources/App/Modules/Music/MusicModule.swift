@@ -83,9 +83,11 @@ final class MusicModule: YumiModule {
     private var titledIn: [MusicPlayer: String] = [:]
     /// The YouTube tabs of the browsers in `BrowserTab.browsers`, from their last answer.
     private var browserTabs: [String: [BrowserTab]] = [:]
-    /// What macOS said was playing at the last answer, and whether it is being asked.
+    /// What macOS said was playing at its last change, watched while Dia plays.
     private var systemNowPlaying: SystemNowPlaying?
-    private var askingSystem = false
+    #if !APPSTORE
+    private let nowPlayingWatch = SystemNowPlaying.Watch()
+    #endif
     /// The tab address the cover was looked for from.
     private var artworkFrom: String?
     /// The browsers asked for their tabs right now, and those that refused Yumi.
@@ -136,9 +138,10 @@ final class MusicModule: YumiModule {
                 // Asked while it plays, and while its track is shown paused, to see it resume or stop
                 let shown = playing.map { titledIn[$0.player] == id && (pausedAt.map { now.timeIntervalSince($0) < MusicSummary.pausedLinger } ?? true) } ?? false
                 if sound == true || shown {
-                    askNowPlaying()
+                    watchNowPlaying()
                     askTabs(of: id)
-                } else if systemNowPlaying?.isFrom(id) == true {
+                } else if nowPlayingWatch.isRunning || systemNowPlaying != nil {
+                    nowPlayingWatch.stop()
                     systemNowPlaying = nil
                 }
                 // What macOS says it plays, whatever the window in front
@@ -225,7 +228,12 @@ final class MusicModule: YumiModule {
                 guard let self else { return }
                 self.askingTabs.remove(browser)
                 switch result {
-                case .success(let answer): self.browserTabs[browser] = BrowserTab.parse(answer.text)
+                case .success(let answer):
+                    let tabs = BrowserTab.parse(answer.text)
+                    guard tabs != self.browserTabs[browser] else { return }
+                    self.browserTabs[browser] = tabs
+                    // A tab gone on to the next song: its cover, at once
+                    if self.titleWatch != nil { self.lookAtTitles() }
                 case .failure(.notAllowed): self.tabsRefused.insert(browser); self.browserTabs[browser] = nil
                 case .failure: self.browserTabs[browser] = nil
                 }
@@ -233,15 +241,13 @@ final class MusicModule: YumiModule {
         }
     }
 
-    /// Asks macOS what plays, for the next look.
-    private func askNowPlaying() {
-        guard !askingSystem else { return }
-        askingSystem = true
-        SystemNowPlaying.run(SystemNowPlaying.readScript) { [weak self] answer in
-            Task { @MainActor in
-                self?.askingSystem = false
-                self?.systemNowPlaying = answer.flatMap(SystemNowPlaying.parse)
-            }
+    /// Watches what macOS says plays: a change (another song, a pause) is looked at at once,
+    /// without waiting for the next look, as Spotify's own news are.
+    private func watchNowPlaying() {
+        nowPlayingWatch.start { [weak self] now in
+            guard let self, self.titleWatch != nil else { return }
+            self.systemNowPlaying = now
+            self.lookAtTitles()
         }
     }
 
@@ -269,6 +275,9 @@ final class MusicModule: YumiModule {
         webBrowser = nil
         titledIn = [:]
         browserTabs = [:]
+        #if !APPSTORE
+        nowPlayingWatch.stop()
+        #endif
         systemNowPlaying = nil
         artworkFrom = nil
         tabOf = [:]
@@ -301,7 +310,6 @@ final class MusicModule: YumiModule {
     /// Another track, or none: its cover and its lyrics are asked again.
     private func trackChanged() {
         artwork = nil
-        artworkFrom = nil
         lyrics = []
         guard let playing else { return }
         #if !APPSTORE
@@ -338,6 +346,8 @@ final class MusicModule: YumiModule {
         case .youtube, .youtubeMusic:
             // Read from the tab: its address, and maybe its cover, are already known
             if let tab = tabOf[track.player] {
+                // The tab still shows the song before: its cover comes once it moves on
+                guard tab.address != artworkFrom else { return }
                 artworkFrom = tab.address
                 guard let url = MusicArtwork.imageURL(from: tab.address, player: track.player) else { return }
                 Task { @MainActor [weak self] in

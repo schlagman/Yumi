@@ -22,6 +22,12 @@ import Foundation
         #expect(helper.isFrom("company.thebrowser.dia"))
     }
 
+    @Test func theWatchEndsWithYumi() {
+        // Each change is one line, and the loop stops once Yumi is gone (its parent becomes launchd)
+        #expect(SystemNowPlaying.watchScript.contains("line + '\\n'"))
+        #expect(SystemNowPlaying.watchScript.contains("while ($.getppid() !== 1)"))
+    }
+
     @Test func movesWithADotWhateverTheLanguage() {
         #expect(SystemNowPlaying.seekScript(to: 83.46).contains("MRMediaRemoteSetElapsedTime(83.5)"))
         #expect(SystemNowPlaying.seekScript(to: -4).contains("MRMediaRemoteSetElapsedTime(0.0)"))
