@@ -89,9 +89,12 @@ private func around(_ now: Date, talk: YumiTalk = .chatty, name: String? = "Este
 
     @Test func aRoutineThatWentWrong() {
         for _ in 0..<6 {
-            let stuck = say(.routine(name: "Relevé hebdo", failed: false))
+            var engine = InitiativeEngine()
+            let stuck = engine.consider(.routine(name: "Relevé hebdo", failed: false), in: around(at(10)))
             #expect(stuck?.text.contains("Relevé hebdo") == true)
-            #expect(stuck?.action == .openRoutine)
+            #expect(stuck?.action == "Voir")
+            // "Voir" opens the run of the routine, not the last agent session
+            #expect(stuck.flatMap { engine.accepted(id: $0.id) } == .openRoutine)
             #expect(say(.routine(name: "Relevé hebdo", failed: true))?.text.contains("souci") == true)
         }
     }
