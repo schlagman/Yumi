@@ -28,6 +28,27 @@ import Foundation
         }
     }
 
+    @Test func theClaudeAppSaysWhichOfItsSessionsItIs() {
+        let events = ClaudeHookTranslator.events(for: payload("Stop", ["host_session_id": "local_1", "host_title": "Plan média",
+                                                                       "host_parent_session_id": "local_0"]))
+        guard case .sessionLocated(_, let origin) = events[1] else {
+            Issue.record("Expected sessionLocated")
+            return
+        }
+        #expect(origin.hostSessionID == "local_1")
+        #expect(origin.hostTitle == "Plan média")
+        #expect(origin.parentHostSessionID == "local_0")
+    }
+
+    @Test func aSecretInTheClaudeAppTitleIsHidden() {
+        let events = ClaudeHookTranslator.events(for: payload("Stop", ["host_title": "Révoquer ghp_abcdefghijklmnopqrstuvwxyz12"]))
+        guard case .sessionLocated(_, let origin) = events[1] else {
+            Issue.record("Expected sessionLocated")
+            return
+        }
+        #expect(origin.hostTitle == "Révoquer •••")
+    }
+
     @Test func aTerminalThatIsNotVSCodeIsNotIgnored() {
         let events = ClaudeHookTranslator.events(for: payload("SessionStart", ["term_program": "Apple_Terminal", "bundle_id": "com.apple.Terminal"]))
         #expect(events.first == .sessionStarted(id, ClaudeHookTranslator.agent, title: "yumi"))
@@ -179,6 +200,18 @@ import Foundation
             hook("PostToolUse", "a", cwd: "/dev/yumi/Yumi", ["tool_name": "Bash"]),
         ])
         #expect(ClaudeSessions.projectName(sessions[SessionID("a")]!) == "Yumi")
+    }
+
+    @Test func theClaudeAppTitleNamesTheSessionOnceItGaveOne() {
+        let scratch = "/Users/me/Library/Application Support/Claude/scratch-workspaces/x/y/scratch-2026-11-19-d3e6c3"
+        var sessions = replay([hook("SessionStart", "a", cwd: scratch, ["host_session_id": "local_1"])])
+        #expect(ClaudeSessions.projectName(sessions[SessionID("a")]!) == "scratch-2026-11-19-d3e6c3")
+        sessions = replay([
+            hook("SessionStart", "a", cwd: scratch, ["host_session_id": "local_1"]),
+            hook("Stop", "a", cwd: scratch, ["host_session_id": "local_1", "host_title": "Plan média décembre"]),
+            hook("PreToolUse", "a", cwd: scratch, ["host_session_id": "local_1", "tool_name": "Bash"]),
+        ])
+        #expect(ClaudeSessions.projectName(sessions[SessionID("a")]!) == "Plan média décembre")
     }
 
     @Test func everyCodingAgentIsInAndTheOthersAreLeftOut() {

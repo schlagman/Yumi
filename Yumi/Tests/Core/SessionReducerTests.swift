@@ -171,6 +171,16 @@ import Foundation
         #expect(sessions[id]?.origin == origin)
     }
 
+    @Test func aHookWithoutTheClaudeAppTitleKeepsTheOneAlreadyKnown() {
+        let named = SessionOrigin(workingDirectory: "/tmp/yumi", hostSessionID: "local_1", hostTitle: "Pochette albums",
+                                  parentHostSessionID: "local_0")
+        var sessions = SessionReducer.apply(.sessionLocated(id, named), to: started())
+        sessions = SessionReducer.apply(.sessionLocated(id, SessionOrigin(workingDirectory: "/tmp/yumi/sub", hostSessionID: "local_1")), to: sessions)
+        #expect(sessions[id]?.origin?.workingDirectory == "/tmp/yumi/sub")
+        #expect(sessions[id]?.origin?.hostTitle == "Pochette albums")
+        #expect(sessions[id]?.origin?.parentHostSessionID == "local_0")
+    }
+
     @Test func rateLimitIsClearedByTheNextPrompt() {
         var sessions = SessionReducer.apply(.rateLimited(id), to: started())
         #expect(sessions[id]?.status == .rateLimited)

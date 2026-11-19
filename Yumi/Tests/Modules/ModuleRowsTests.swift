@@ -47,24 +47,88 @@ import Foundation
         #expect(board.rows().first?.date == start.addingTimeInterval(60))
     }
 
-    @Test func aFinishedSessionStaysAMomentThenLeaves() {
+    @Test func aFinishedTurnStaysToSeeUntilThePersonOpensIt() {
         var board = SessionBoard()
         let done = session("a", "yumi", recency: 1) { $0.status = .completed; $0.isTurnActive = false }
         board.update([done], now: start)
-        #expect(board.rows(now: start.addingTimeInterval(60)).map(\.label) == ["terminée"])
-        #expect(board.nextDeparture(now: start) == start.addingTimeInterval(SessionBoard.keepFinished))
-        #expect(board.rows(now: start.addingTimeInterval(SessionBoard.keepFinished)).isEmpty)
+        let later = start.addingTimeInterval(600)
+        #expect(board.rows(now: later).map(\.label) == ["à voir"])
+        #expect(board.rows(now: later).first?.date == start)
+        #expect(board.nextDeparture(now: start) == nil)
+        board.markSeen("a")
+        #expect(board.rows(now: later).isEmpty)
         // Still completed in the store: it does not come back.
-        board.update([done], now: start.addingTimeInterval(120))
-        board.update([done], now: start.addingTimeInterval(130))
-        #expect(board.rows(now: start.addingTimeInterval(130)).isEmpty)
+        board.update([done], now: later.addingTimeInterval(10))
+        #expect(board.rows(now: later.addingTimeInterval(10)).isEmpty)
         // A new prompt brings it back.
         var busy = done
         busy.status = .running
         busy.activity = .thinking
         busy.isTurnActive = true
-        board.update([busy], now: start.addingTimeInterval(140))
-        #expect(board.rows(now: start.addingTimeInterval(140)).map(\.label) == ["travaille"])
+        board.update([busy], now: later.addingTimeInterval(20))
+        #expect(board.rows(now: later.addingTimeInterval(20)).map(\.label) == ["travaille"])
+    }
+
+    @Test func openingASessionThatIsNotToSeeKeepsItListed() {
+        var board = SessionBoard()
+        board.update([session("a", "yumi", recency: 1) { $0.activity = .thinking }], now: start)
+        board.markSeen("a")
+        #expect(board.rows(now: start).map(\.label) == ["travaille"])
+    }
+
+    @Test func whatWaitsForThePersonComesOldestFirstAfterTheApprovals() {
+        var board = SessionBoard()
+        let first = session("a", "yumi", recency: 1) { $0.status = .completed; $0.isTurnActive = false }
+        board.update([first], now: start)
+        let second = session("b", "site", recency: 2) { $0.status = .completed; $0.isTurnActive = false }
+        let working = session("c", "blog", recency: 3) { $0.activity = .thinking }
+        board.update([first, second, working], now: start.addingTimeInterval(60))
+        let approval = session("d", "api", recency: 4) {
+            $0.activity = .requestingPermission(PermissionRequest(tool: "Bash")); $0.status = .waitingForUser
+        }
+        board.update([first, second, working, approval], now: start.addingTimeInterval(120))
+        #expect(board.rows(now: start.addingTimeInterval(130)).map(\.title) == ["api", "yumi", "site", "blog"])
+        #expect(board.toSee == 2)
+        #expect(board.head == "d")
+        board.update([first, second, working], now: start.addingTimeInterval(140))
+        #expect(board.head == "a")
+        board.markSeen("a")
+        #expect(board.toSee == 1)
+        #expect(board.head == "b")
+    }
+
+    @Test func aSideSessionFollowsTheSessionItCameFromWhereverTheMostUrgentIs() {
+        var board = SessionBoard()
+        let mother = session("m", "yumi", recency: 1) { $0.activity = .thinking; $0.origin?.hostSessionID = "local_m" }
+        let other = session("o", "site", recency: 2) { $0.activity = .thinking }
+        let side = session("s", "notion", recency: 3) {
+            $0.status = .completed; $0.isTurnActive = false
+            $0.origin?.hostSessionID = "local_s"; $0.origin?.parentHostSessionID = "local_m"
+        }
+        board.update([mother, other, side], now: start)
+        #expect(board.rows(now: start).map(\.title) == ["yumi", "↳ notion", "site"])
+        // "Voir" still goes to the turn to see, not to the session leading its family.
+        #expect(board.head == "s")
+    }
+
+    @Test func aSideSessionWithoutItsMotherInTheListIsShownAsUsual() {
+        var board = SessionBoard()
+        board.update([session("s", "notion", recency: 1) { $0.origin?.parentHostSessionID = "local_gone" }], now: start)
+        #expect(board.rows(now: start).map(\.title) == ["notion"])
+    }
+
+    @Test func familiesNeverRepeatALineNorLoop() {
+        var board = SessionBoard()
+        func linked(_ id: String, parent: String) -> Session {
+            session(id, id, recency: 1) { $0.origin?.hostSessionID = "local_\(id)"; $0.origin?.parentHostSessionID = parent }
+        }
+        // A grandchild, and two sessions that name each other.
+        board.update([linked("m", parent: ""), linked("s", parent: "local_m"), linked("g", parent: "local_s"),
+                      linked("x", parent: "local_y"), linked("y", parent: "local_x")], now: start)
+        let titles = board.rows(now: start).map(\.title)
+        #expect(titles.count == 5)
+        #expect(titles.prefix(3) == ["m", "↳ g", "↳ s"] || titles.prefix(3) == ["m", "↳ s", "↳ g"])
+        #expect(Set(titles.suffix(2)) == ["x", "y"])
     }
 
     @Test func aClosedSessionIsShownFinishedThenLeaves() {

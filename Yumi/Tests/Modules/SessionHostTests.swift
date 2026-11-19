@@ -32,6 +32,19 @@ import Foundation
         #expect(second(SessionOrigin(workingDirectory: "/dev/yumi")) == nil)
     }
 
+    @Test func theClaudeAppOpensTheSessionItselfFromItsLink() {
+        let id = "local_11111111-2222-3333-4444-555555555555"
+        var origin = desktop
+        origin.hostSessionID = id
+        #expect(SessionHost.deepLink(for: origin)?.absoluteString == "claude://claude.ai/epitaxy/\(id)")
+        // Only an identifier of the exact shape becomes a link.
+        origin.hostSessionID = "local_../../settings"
+        #expect(SessionHost.deepLink(for: origin) == nil)
+        #expect(SessionHost.deepLink(for: desktop) == nil)
+        #expect(SessionHost.deepLink(for: terminal) == nil)
+        #expect(SessionHost.deepLink(for: nil) == nil)
+    }
+
     @Test func cursorIsAnEditorByItsRealIdentifier() {
         #expect(SessionHost.kind(of: SessionOrigin(hostBundleID: "com.todesktop.230313mzl4w4u92")) == .editor)
     }
@@ -66,6 +79,27 @@ import Foundation
     @Test func anApplicationThatIsNotInstalledCannotBeBroughtForward() {
         #expect(!ClaudeCodeModule.bringToFront(SessionOrigin(hostBundleID: "com.example.not-installed")))
         #expect(!ClaudeCodeModule.bringToFront(nil))
+    }
+
+    @Test func theFoldedIslandSaysHowManyTurnsWaitToBeSeen() {
+        let module = ClaudeCodeModule(onShow: {})
+        module.start {}
+        var sessions: [SessionID: Session] = [:]
+        for name in ["a", "b"] {
+            sessions = SessionReducer.apply(.sessionStarted(SessionID(name), ClaudeHookTranslator.agent, title: name), to: sessions)
+            sessions = SessionReducer.apply(.taskCompleted(SessionID(name)), to: sessions)
+        }
+        sessions = SessionReducer.apply(.sessionStarted(SessionID("c"), ClaudeHookTranslator.agent, title: "c"), to: sessions)
+        sessions = SessionReducer.apply(.promptSubmitted(SessionID("c"), text: "go"), to: sessions)
+        module.receive(.promptSubmitted(SessionID("c"), text: "go"), sessions: sessions)
+        #expect(module.snapshot.live?.text == "2 sessions à voir")
+
+        // An approval still comes first.
+        let request = PermissionRequest(tool: "Bash", command: "ls")
+        sessions = SessionReducer.apply(.permissionRequested(SessionID("c"), request), to: sessions)
+        module.receive(.permissionRequested(SessionID("c"), request), sessions: sessions)
+        #expect(module.snapshot.live?.priority == ModuleLivePriority.attention)
+        module.stop()
     }
 }
 

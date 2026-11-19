@@ -15,8 +15,10 @@ enum ClaudeSessions {
             }
     }
 
-    /// The folder the session works in gives it its name; it can change during the session.
+    /// The title the Claude app gave the session, otherwise the folder it works in (which can
+    /// change during the session).
     static func projectName(_ session: Session) -> String {
+        if let title = session.origin?.hostTitle, !title.isEmpty { return title }
         guard let directory = session.origin?.workingDirectory, !directory.isEmpty else { return session.title }
         return ClaudeHookTranslator.projectName(forDirectory: directory)
     }
@@ -161,6 +163,13 @@ enum SessionHost {
         return knownPrograms[origin.hostName.lowercased()]
     }
 
+    /// The Claude app opens one of its sessions from a link: that very session, not only the app.
+    /// Nil unless the session carries an identifier of the exact shape the app gives.
+    static func deepLink(for origin: SessionOrigin?) -> URL? {
+        guard let id = origin?.hostSessionID, id.wholeMatch(of: /local_[0-9a-f-]{36}/) != nil else { return nil }
+        return URL(string: "claude://claude.ai/epitaxy/\(id)")
+    }
+
     static func isEditor(_ origin: SessionOrigin?) -> Bool {
         guard let id = bundleID(for: origin) else { return false }
         return knownEditors.contains(id) || editorMarkers.contains { id.lowercased().contains($0) }
@@ -219,10 +228,11 @@ enum SessionHost {
 
 // MARK: - The list of sessions
 
-/// Every session of the module's list, with since when each one is in its state. A finished
-/// session (its answer done, or the session closed) stays a moment with its result, then leaves.
+/// Every session of the module's list, with since when each one is in its state. A finished turn
+/// stays "to see" until the person opens the session or writes to it, like an inbox; a closed
+/// session stays a moment with its result, then leaves.
 struct SessionBoard: Equatable, Sendable {
-    /// How long a finished session stays in the list.
+    /// How long a closed session stays in the list.
     static let keepFinished: TimeInterval = 90
 
     private struct Seen: Equatable, Sendable {
@@ -235,8 +245,8 @@ struct SessionBoard: Equatable, Sendable {
     }
 
     private var seen: [SessionID: Seen] = [:]
-    /// Finished sessions already gone from the list, with the phase they left in: they come
-    /// back only when they start something else.
+    /// Finished turns the person already opened, with the phase they left in: they come back
+    /// only when they start something else.
     private var departed: [SessionID: String] = [:]
 
     init() {}
@@ -261,29 +271,85 @@ struct SessionBoard: Equatable, Sendable {
         }
         for (id, entry) in seen where Self.expired(entry, now: now) {
             seen[id] = nil
-            if !entry.closed { departed[id] = entry.phase }
         }
+    }
+
+    /// How many finished turns wait for the person to open them.
+    var toSee: Int { seen.values.filter { Self.rank($0) == Self.toSeeRank }.count }
+
+    /// The most urgent session: the approval, the question, then the turn finished longest ago
+    /// (even when a family shows the session it came from above it).
+    var head: String? { listed(now: .now).first?.session.id.value }
+
+    /// The person opened the session: a finished turn leaves the list until the session does
+    /// something else. Any other session stays as it is.
+    mutating func markSeen(_ id: String) {
+        let key = SessionID(id)
+        guard let entry = seen[key], Self.rank(entry) == Self.toSeeRank else { return }
+        seen[key] = nil
+        departed[key] = entry.phase
     }
 
     /// The sessions to list, the ones waiting for something first.
     /// - Parameter journals: what each session is working on (ClaudeSessionJournals), by session id.
     func rows(now: Date = .now, journals: [String: SessionJournal] = [:]) -> [ModuleRow] {
-        let listed = seen.values
+        let listed = listed(now: now)
+        // Several agents at once: each line says whose it is ("site · Codex"). With one agent,
+        // the module already carries its name.
+        let severalAgents = Set(listed.map(\.session.agent.id)).count > 1
+        return Self.grouped(listed).map { entry, side in
+            var row = Self.enriched(Self.row(entry), journals[entry.session.id.value], now: now)
+            if side { row.title = "↳ " + row.title }
+            if severalAgents { row.title += " · " + AgentCatalog.speaker(of: entry.session.agent) }
+            return row
+        }
+    }
+
+    /// The sessions still listed, the most urgent first.
+    private func listed(now: Date) -> [Seen] {
+        seen.values
             .filter { !Self.expired($0, now: now) }
             .sorted { a, b in
                 let rankA = Self.rank(a), rankB = Self.rank(b)
                 if rankA != rankB { return rankA < rankB }
+                // What waits for the person: the one waiting longest first, like an inbox.
+                if rankA <= Self.toSeeRank, a.since != b.since { return a.since < b.since }
                 if a.session.recency != b.session.recency { return a.session.recency > b.session.recency }
                 return a.session.id.value < b.session.id.value
             }
-        // Several agents at once: each line says whose it is ("site · Codex"). With one agent,
-        // the module already carries its name.
-        let severalAgents = Set(listed.map(\.session.agent.id)).count > 1
-        return listed.map { entry in
-            var row = Self.enriched(Self.row(entry), journals[entry.session.id.value], now: now)
-            if severalAgents { row.title += " · " + AgentCatalog.speaker(of: entry.session.agent) }
-            return row
+    }
+
+    /// A side session the Claude app started from another one follows it: the family takes the
+    /// place of its most urgent member, the session it came from first.
+    private static func grouped(_ listed: [Seen]) -> [(entry: Seen, side: Bool)] {
+        var byHost: [String: SessionID] = [:]
+        for entry in listed {
+            if let host = entry.session.origin?.hostSessionID, !host.isEmpty { byHost[host] = entry.session.id }
         }
+        var parents: [SessionID: SessionID] = [:]
+        for entry in listed {
+            if let host = entry.session.origin?.parentHostSessionID, let parent = byHost[host], parent != entry.session.id {
+                parents[entry.session.id] = parent
+            }
+        }
+        func root(_ id: SessionID) -> SessionID {
+            var current = id, visited: Set<SessionID> = [id]
+            while let next = parents[current] {
+                guard visited.insert(next).inserted else { return id }  // sessions naming each other: no family
+                current = next
+            }
+            return current
+        }
+        let roots = Dictionary(uniqueKeysWithValues: listed.map { ($0.session.id, root($0.session.id)) })
+        var placed: Set<SessionID> = []
+        var result: [(entry: Seen, side: Bool)] = []
+        for entry in listed {
+            guard let top = roots[entry.session.id], placed.insert(top).inserted else { continue }
+            let family = listed.filter { roots[$0.session.id] == top }
+            result += family.filter { $0.session.id == top }.map { ($0, false) }
+            result += family.filter { $0.session.id != top }.map { ($0, true) }
+        }
+        return result
     }
 
     /// The row with what the journal knows: the action or the task in progress instead of
@@ -305,9 +371,9 @@ struct SessionBoard: Equatable, Sendable {
         return row
     }
 
-    /// When the next finished session leaves the list, to refresh it then.
+    /// When the next closed session leaves the list, to refresh it then.
     func nextDeparture(now: Date = .now) -> Date? {
-        seen.values.filter { Self.finished($0) }.map { $0.since.addingTimeInterval(Self.keepFinished) }
+        seen.values.filter(\.closed).map { $0.since.addingTimeInterval(Self.keepFinished) }
             .filter { $0 > now }.min()
     }
 
@@ -316,12 +382,8 @@ struct SessionBoard: Equatable, Sendable {
         seen[SessionID(action)]?.session
     }
 
-    private static func finished(_ entry: Seen) -> Bool {
-        entry.closed || entry.session.status == .completed
-    }
-
     private static func expired(_ entry: Seen, now: Date) -> Bool {
-        finished(entry) && now.timeIntervalSince(entry.since) >= keepFinished
+        entry.closed && now.timeIntervalSince(entry.since) >= keepFinished
     }
 
     private static func phase(_ session: Session) -> String {
@@ -334,20 +396,23 @@ struct SessionBoard: Equatable, Sendable {
         }
     }
 
-    /// Approval, question, working, error, open, finished.
+    /// The rank of a finished turn the person has not opened yet.
+    private static let toSeeRank = 2
+
+    /// Approval, question, to see, working, error, open, closed.
     private static func rank(_ entry: Seen) -> Int {
-        if entry.closed { return 5 }
+        if entry.closed { return 6 }
         let session = entry.session
         switch session.activity {
         case .requestingPermission: return 0
         case .asking:               return 1
-        case .working, .thinking:   return 2
+        case .working, .thinking:   return 3
         case .idle:
             switch session.status {
             case .waitingForUser: return 1
-            case .running:        return session.isTurnActive ? 2 : 4
-            case .errored, .rateLimited: return 3
-            case .completed:      return 5
+            case .completed:      return toSeeRank
+            case .running:        return session.isTurnActive ? 3 : 5
+            case .errored, .rateLimited: return 4
             }
         }
     }
@@ -401,7 +466,7 @@ struct SessionBoard: Equatable, Sendable {
                 row.detail = loc("A atteint sa limite.")
             case .completed:
                 row.state = .success
-                row.label = loc("terminée")
+                row.label = loc("à voir")
                 row.detail = loc("C'est passé.")
             }
         }

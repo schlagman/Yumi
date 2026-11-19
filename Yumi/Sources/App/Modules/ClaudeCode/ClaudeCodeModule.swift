@@ -12,6 +12,7 @@ final class ClaudeCodeModule: YumiModule {
     /// Wakes the module when a finished session leaves the list.
     private var departure: Task<Void, Never>?
     private var rowObserver: NSObjectProtocol?
+    private var openedObserver: NSObjectProtocol?
     private var onChange: (@MainActor () -> Void)?
     /// Shows the sessions in the island (the pending approval if there is one).
     private let onShow: @MainActor () -> Void
@@ -42,6 +43,13 @@ final class ClaudeCodeModule: YumiModule {
             snapshot.live = ModuleLive(text: chat.text,
                                        priority: chat.needsUser ? ModuleLivePriority.attention : ModuleLivePriority.activity)
         }
+        // Finished turns not opened yet: above a session at work, below an approval or the chat.
+        let toSeePriority = ClaudeSessions.workingPriority + 10
+        if board.toSee > 0, (snapshot.live?.priority ?? .min) < toSeePriority {
+            snapshot.live = ModuleLive(text: loc("\(FrenchText.count(board.toSee, "session", "sessions")) à voir"),
+                                       priority: toSeePriority,
+                                       controls: [ModuleControl(id: ModuleAction.primary.rawValue, symbol: "eye.fill", label: loc("Voir"))])
+        }
         return snapshot
     }
 
@@ -58,9 +66,17 @@ final class ClaudeCodeModule: YumiModule {
         ClaudeSessionJournals.shared.onChange = { [weak self] in self?.onChange?() }
         rowObserver = NotificationCenter.default.addObserver(forName: .moduleRowAction, object: nil, queue: .main) { [weak self] note in
             guard note.userInfo?["module"] as? String == "claude-code", let row = note.userInfo?["row"] as? String else { return }
-            MainActor.assumeIsolated { self?.open(row) }
+            MainActor.assumeIsolated { _ = self?.open(row) }
+        }
+        // The pill and the approval card open a session without going through the list.
+        openedObserver = NotificationCenter.default.addObserver(forName: Self.sessionOpened, object: nil, queue: .main) { [weak self] note in
+            guard let id = note.userInfo?["session"] as? String else { return }
+            MainActor.assumeIsolated { self?.seen(id) }
         }
     }
+
+    /// Posted with the session's id (`"session"`) when Yumi brings a session forward from outside the module.
+    static let sessionOpened = Notification.Name("app.yumi.claude-session-opened")
 
     func stop() {
         onChange = nil
@@ -72,6 +88,8 @@ final class ClaudeCodeModule: YumiModule {
         ClaudeSessionJournals.shared.onChange = nil
         if let rowObserver { NotificationCenter.default.removeObserver(rowObserver) }
         rowObserver = nil
+        if let openedObserver { NotificationCenter.default.removeObserver(openedObserver) }
+        openedObserver = nil
     }
 
     func receive(_ event: YumiEvent, sessions: [SessionID: Session]) {
@@ -98,9 +116,21 @@ final class ClaudeCodeModule: YumiModule {
         }
     }
 
-    /// A line of the list was clicked: the application its session runs in comes forward.
-    private func open(_ row: String) {
-        Self.bringToFront(board.session(row)?.origin)
+    /// Brings forward the application a session runs in (a line, "Voir" or "Ouvrir"), and a
+    /// finished turn counts as seen. Returns false when the host is unknown.
+    private func open(_ id: String?) -> Bool {
+        // A turn already seen has left the list but is still in the store.
+        let session = id.flatMap { id in board.session(id) ?? sessions.first { $0.id.value == id } }
+        guard let id, Self.bringToFront(session?.origin) else { return false }
+        seen(id)
+        return true
+    }
+
+    /// A finished turn the person opened leaves the list.
+    private func seen(_ id: String) {
+        guard board.toSee > 0 else { return }
+        board.markSeen(id)
+        onChange?()
     }
 
     func perform(_ action: ModuleAction) {
@@ -110,24 +140,27 @@ final class ClaudeCodeModule: YumiModule {
             missing = hooksMissing()
         case .primary:
             // A pending approval is answered in the island. Otherwise "Voir" goes where the
-            // conversation is: the application the session runs in, whichever it is.
+            // conversation at the head of the list is (a question, then the turn finished longest
+            // ago): the application the session runs in, whichever it is.
             let approvalPending = sessions.contains {
                 if case .requestingPermission = $0.activity { return true }
                 return false
             }
-            if approvalPending || !Self.bringToFront(sessions.first?.origin) { onShow() }
+            if approvalPending || !open(board.head ?? sessions.first?.id.value) { onShow() }
         case .secondary:
-            Self.bringToFront(sessions.first?.origin)
+            _ = open(sessions.first?.id.value)
         case .previous:
             break
         }
     }
 
-    /// Brings the application a session runs in to the front. An editor reopens the project folder,
-    /// which focuses the right window when several are open; Terminal and iTerm2 select the
-    /// session's tab. Returns false when the host is unknown.
+    /// Brings the application a session runs in to the front. The Claude app opens the session
+    /// itself from its link; an editor reopens the project folder, which focuses the right window
+    /// when several are open; Terminal and iTerm2 select the session's tab. Returns false when the
+    /// host is unknown.
     @discardableResult
     static func bringToFront(_ origin: SessionOrigin?) -> Bool {
+        if let link = SessionHost.deepLink(for: origin), NSWorkspace.shared.open(link) { return true }
         guard let origin, let bundleID = SessionHost.bundleID(for: origin) else { return false }
         let workspace = NSWorkspace.shared
         if SessionHost.isEditor(origin), !origin.workingDirectory.isEmpty,

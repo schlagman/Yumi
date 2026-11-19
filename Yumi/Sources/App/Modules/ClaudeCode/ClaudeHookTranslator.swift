@@ -86,7 +86,10 @@ enum ClaudeHookTranslator {
                                    hostBundleID: payload["bundle_id"] as? String ?? "",
                                    hostName: payload["term_program"] as? String ?? "",
                                    tty: payload["tty"] as? String ?? "",
-                                   terminalSessionID: itermSession(payload["iterm_session_id"] as? String ?? ""))
+                                   terminalSessionID: itermSession(payload["iterm_session_id"] as? String ?? ""),
+                                   hostSessionID: payload["host_session_id"] as? String ?? "",
+                                   hostTitle: SecretMask.mask(payload["host_title"] as? String ?? ""),
+                                   parentHostSessionID: payload["host_parent_session_id"] as? String ?? "")
         return [.sessionStarted(id, agent, title: projectName(forDirectory: cwd)),
                 .sessionLocated(id, origin)] + specific
     }

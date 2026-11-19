@@ -871,7 +871,7 @@ final class ClaudeTaskMirror {
         guard let idx = state.tasks.firstIndex(where: { $0.id == Self.taskID }) else { return }
         var task = state.tasks[idx]
         let featured = ClaudeSessions.ordered(sessions).first
-        Self.featuredOrigin = featured?.origin
+        Self.featuredID = featured?.id
         Self.origins = sessions.compactMapValues(\.origin)
         if let session = featured {
             task.name = ClaudeSessions.projectName(session)
@@ -938,8 +938,8 @@ final class ClaudeTaskMirror {
         state.tasks[idx].pillBadge = badge
     }
 
-    /// Where the session shown by the pill runs.
-    private static var featuredOrigin: SessionOrigin?
+    /// The session shown by the pill.
+    private static var featuredID: SessionID?
     /// What the person refused in each session's current turn ("supprimer build"), until its next request.
     static var refusals: [SessionID: String] = [:]
     /// The session whose turn ended last: the end card speaks of it.
@@ -955,14 +955,17 @@ final class ClaudeTaskMirror {
     /// Brings forward the application, and the tab when the terminal can say, of one session.
     @discardableResult
     static func openSession(_ id: String) -> Bool {
-        ClaudeCodeModule.bringToFront(origins[SessionID(id)])
+        guard ClaudeCodeModule.bringToFront(origins[SessionID(id)]) else { return false }
+        NotificationCenter.default.post(name: ClaudeCodeModule.sessionOpened, object: nil, userInfo: ["session": id])
+        return true
     }
 
     /// Brings forward the application the session of the pill runs in: its terminal, its editor
     /// (on the project), or the Claude app. Never another one. Returns false when it is unknown.
     @discardableResult
     static func openSession() -> Bool {
-        ClaudeCodeModule.bringToFront(featuredOrigin)
+        guard let featuredID else { return false }
+        return openSession(featuredID.value)
     }
 
     /// Opens the island on the Claude Code sessions: on the pending approval if there is one.
@@ -1004,7 +1007,34 @@ private func hookScriptTemplate(header: String, summary: String, socketPath: Str
 #!/usr/bin/env python3
 # \(header)
 # \(summary)
-import sys, json, os, socket, subprocess
+import sys, json, os, socket, subprocess, glob, re
+
+def claude_app_session(event):
+    # The Claude app gives each session an id (local_...) and files it with its title and, for a
+    # side session, the session it came from. That file is not documented: anything unexpected
+    # leaves the fields out, and only those two values are read. Never on the frequent tool hooks.
+    sid = os.environ.get('CLAUDE_CODE_HOST_SESSION_ID', '')
+    if not re.fullmatch('local_[0-9a-f-]{36}', sid):
+        return {}
+    found = {'host_session_id': sid}
+    if event in ('PreToolUse', 'PostToolUse', 'PostToolUseFailure'):
+        return found
+    try:
+        pattern = os.path.expanduser('~/Library/Application Support/Claude/claude-code-sessions/*/*/' + sid + '.json')
+        for path in glob.glob(pattern)[:1]:
+            if os.path.getsize(path) > 5000000:
+                break
+            with open(path, encoding='utf-8') as f:
+                card = json.load(f)
+            title = card.get('title')
+            if isinstance(title, str) and title.strip():
+                found['host_title'] = title.strip()[:120]
+            parent = (card.get('spawnedFrom') or {}).get('sessionId')
+            if isinstance(parent, str) and re.fullmatch('local_[0-9a-f-]{36}', parent):
+                found['host_parent_session_id'] = parent
+    except Exception:
+        pass
+    return found
 
 def ancestors():
     # The command lines of the processes above the hook, nearest first: the app tells from
@@ -1063,6 +1093,7 @@ def main():
     payload.setdefault('term_session_id', env.get('TERM_SESSION_ID', ''))
     payload.setdefault('bundle_id', env.get('__CFBundleIdentifier', ''))
     payload.setdefault('yumi_processes', ancestors())
+    payload.update(claude_app_session(payload.get('hook_event_name', '')))
     if 'tty' not in payload:
         payload['tty'] = find_tty()
     if 'cwd' not in payload or not payload['cwd']:

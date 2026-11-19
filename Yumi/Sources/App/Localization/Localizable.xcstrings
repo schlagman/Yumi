@@ -983,6 +983,16 @@
         }
       }
     },
+    "%@ à voir": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ to see"
+          }
+        }
+      }
+    },
     "%@ étoiles": {
       "localizations": {
         "en": {
@@ -10809,6 +10819,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "to your calendar"
+          }
+        }
+      }
+    },
+    "à voir": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "to see"
           }
         }
       }

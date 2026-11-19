@@ -86,14 +86,24 @@ struct SessionOrigin: Equatable, Codable, Sendable {
     var tty: String
     /// iTerm2's own identifier of the session's pane (the UUID of `ITERM_SESSION_ID`). Empty when unknown.
     var terminalSessionID: String
+    /// The Claude app's own identifier of the session (`local_…`): opens that very session. Empty elsewhere.
+    var hostSessionID: String
+    /// The title the Claude app gave the session. Empty until it gives one, and elsewhere.
+    var hostTitle: String
+    /// The Claude app session this one was started from (a side session). Empty when none.
+    var parentHostSessionID: String
 
     init(workingDirectory: String = "", hostBundleID: String = "", hostName: String = "",
-         tty: String = "", terminalSessionID: String = "") {
+         tty: String = "", terminalSessionID: String = "",
+         hostSessionID: String = "", hostTitle: String = "", parentHostSessionID: String = "") {
         self.workingDirectory = workingDirectory
         self.hostBundleID = hostBundleID
         self.hostName = hostName
         self.tty = tty
         self.terminalSessionID = terminalSessionID
+        self.hostSessionID = hostSessionID
+        self.hostTitle = hostTitle
+        self.parentHostSessionID = parentHostSessionID
     }
 }
 

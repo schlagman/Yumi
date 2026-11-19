@@ -637,3 +637,21 @@ Après le prénom, une deuxième étape demande « Et tu fais quoi, surtout, sur
 - Le profil et le mot libre vont dans la mémoire locale, du côté de la personne.
 - « Je code » est coché d'avance quand un agent de code est sur le Mac, jamais en mode tournage.
 
+## Les sessions de l'app Claude (branche `worktree-claude-sessions`)
+
+Validé avec l'auteur le 19 novembre 2026, pour qui garde une dizaine de sessions ouvertes dans l'app Claude (onglet Code).
+
+- **Ce que l'app Claude dit d'une session.** Elle donne à chaque session un id `local_…` (variable `CLAUDE_CODE_HOST_SESSION_ID`, que les hooks héritent). Elle range une fiche par session dans `~/Library/Application Support/Claude/claude-code-sessions/*/*/<id>.json`.
+  - Le relais du hook lit dans cette fiche le titre (`title`) et la session mère (`spawnedFrom.sessionId`), et rien d'autre.
+  - Il ne la lit jamais sur les événements d'outils, et jamais au-delà de 5 Mo. Coût mesuré : 0,4 ms pour une fiche courante, 4 ms pour 1 Mo.
+  - Ce format n'est pas documenté : toute surprise laisse les champs vides, et Yumi revient au nom du dossier.
+  - Les trois valeurs vivent dans `SessionOrigin` ; le réducteur garde le titre et la session mère quand un événement ne les apporte pas.
+- **Le nom d'une session** est son titre dans l'app Claude, sinon son dossier. Les dossiers temporaires `scratch-…` ne s'affichent plus.
+- **« Ouvrir Claude »** ouvre la session elle-même par le lien `claude://claude.ai/epitaxy/<id>`. L'id est contrôlé deux fois (relais et Swift) avant de devenir un chemin ou un lien.
+- **La liste devient une boîte de réception.** Un tour fini reste « à voir » jusqu'à ce que la personne l'ouvre depuis Yumi (ligne, « Voir », « Ouvrir », pastille, carte d'accord) ou écrive à la session. Une session fermée part toujours au bout de 90 s.
+  - Ordre : accord, question, à voir (la plus ancienne d'abord), puis le reste comme avant.
+  - « Voir » ouvre la tête de la file. L'île repliée dit « N sessions à voir », au-dessus d'une session qui travaille, sous un accord ou le chat.
+  - Limite assumée : une session lue directement dans l'app Claude, sans réponse, reste « à voir ».
+- **Les sessions annexes** suivent leur session mère, précédées de « ↳ ». La famille prend la place de son membre le plus urgent.
+- **Écartée : la jauge du forfait.** Claude Code ne la donne qu'à sa barre d'état et à l'app Claude, et aucun hook ne la transmet. Lire le jeton de Claude Code dans le trousseau pour interroger l'API d'utilisation reviendrait à prendre le secret d'une autre app. À rouvrir si un hook expose `rate_limits`.
+

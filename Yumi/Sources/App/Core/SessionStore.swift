@@ -26,7 +26,12 @@ enum SessionReducer {
         case .sessionEnded(let id):
             sessions.removeValue(forKey: id)
 
-        case .sessionLocated(let id, let origin):
+        case .sessionLocated(let id, var origin):
+            // The hook reads the Claude app's title only on its rare events: the others keep it.
+            if let known = sessions[id]?.origin {
+                if origin.hostTitle.isEmpty { origin.hostTitle = known.hostTitle }
+                if origin.parentHostSessionID.isEmpty { origin.parentHostSessionID = known.parentHostSessionID }
+            }
             sessions[id]?.origin = origin
 
         case .promptSubmitted(let id, _):
