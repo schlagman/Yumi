@@ -1,8 +1,9 @@
 import Foundation
 
 /// What macOS says is playing (the « Now Playing » of Control Center): the app, the title, the
-/// artist, where the track is. Since macOS 15.4 only Apple's own programs may read it, so it is
-/// asked through `osascript` (JavaScript for Automation), which is one. Whatever window is in
+/// artist, where the track is, its cover. Since macOS 15.4 only Apple's own programs may read it:
+/// the small library `NowPlaying/YumiNowPlaying.m`, built next to the app, is loaded by
+/// /usr/bin/perl, which is one, and writes each change as a line of JSON. Whatever window is in
 /// front, a browser's tab playing behind is found.
 struct SystemNowPlaying: Decodable, Equatable, Sendable {
     var bundle: String?
@@ -15,37 +16,13 @@ struct SystemNowPlaying: Decodable, Equatable, Sendable {
     var elapsed: Double?
     /// When `elapsed` was true, in seconds since 1970.
     var timestamp: Double?
+    /// The cover, as the app gave it to macOS (base64 in the JSON).
+    var artwork: Data?
 
-    /// Prints the Now Playing as one line of JSON each time it changes, looking twice a second,
-    /// until Yumi is gone (its parent becomes launchd).
-    static let watchScript = """
-    ObjC.import('Foundation');
-    $.NSBundle.bundleWithPath('/System/Library/PrivateFrameworks/MediaRemote.framework/').load;
-    ObjC.bindFunction('getppid', ['int', []]);
-    const R = $.NSClassFromString('MRNowPlayingRequest');
-    const stdout = $.NSFileHandle.fileHandleWithStandardOutput;
-    function read() {
-      const path = R.localNowPlayingPlayerPath, item = R.localNowPlayingItem;
-      const info = item.isNil() ? null : item.nowPlayingInfo;
-      const value = k => { if (!info || info.isNil()) return null; const x = info.objectForKey(k); return x.isNil() ? null : ObjC.unwrap(x); };
-      const stamp = info && !info.isNil() ? info.objectForKey('kMRMediaRemoteNowPlayingInfoTimestamp') : null;
-      return JSON.stringify({
-        bundle: path.isNil() ? null : ObjC.unwrap(path.client.bundleIdentifier),
-        parent: path.isNil() ? null : ObjC.unwrap(path.client.parentApplicationBundleIdentifier),
-        playing: ObjC.unwrap(R.localIsPlaying) === true,
-        title: value('kMRMediaRemoteNowPlayingInfoTitle'), artist: value('kMRMediaRemoteNowPlayingInfoArtist'),
-        album: value('kMRMediaRemoteNowPlayingInfoAlbum'), duration: value('kMRMediaRemoteNowPlayingInfoDuration'),
-        elapsed: value('kMRMediaRemoteNowPlayingInfoElapsedTime'),
-        timestamp: stamp && !stamp.isNil() ? stamp.timeIntervalSince1970 : null
-      });
-    }
-    let last = '';
-    while ($.getppid() !== 1) {
-      const line = read();
-      if (line !== last) { stdout.writeData($(line + '\\n').dataUsingEncoding($.NSUTF8StringEncoding)); last = line; }
-      delay(0.5);
-    }
-    """
+    /// Loads the library given as perl's argument and runs its watch, which never returns.
+    static let perlLoader = "use DynaLoader; my $lib = DynaLoader::dl_load_file($ARGV[0], 0) or exit 1; "
+        + "my $watch = DynaLoader::dl_find_symbol($lib, 'yumi_now_playing_watch') or exit 1; "
+        + "DynaLoader::dl_install_xsub('main::watch', $watch); watch();"
 
     /// Moves the track macOS shows as playing to `seconds`.
     static func seekScript(to seconds: TimeInterval) -> String {
@@ -73,19 +50,21 @@ struct SystemNowPlaying: Decodable, Equatable, Sendable {
     }
 
     #if !APPSTORE
-    /// `watchScript` running in `osascript`: each line it prints is handed to `onChange` on the
-    /// main thread. Started again by `start` when it ended.
+    /// The library running in perl: each line it prints is handed to `onChange` on the main
+    /// thread. Started again by `start` when it ended. Nothing without the library (a build
+    /// that did not make it).
     @MainActor
     final class Watch {
         private var process: Process?
+        private static let library = Bundle.main.privateFrameworksURL?.appendingPathComponent("YumiNowPlaying.dylib")
 
         var isRunning: Bool { process?.isRunning == true }
 
         func start(onChange: @escaping @MainActor @Sendable (SystemNowPlaying?) -> Void) {
-            guard !isRunning else { return }
+            guard !isRunning, let library = Self.library, FileManager.default.fileExists(atPath: library.path) else { return }
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = ["-l", "JavaScript", "-e", SystemNowPlaying.watchScript]
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+            process.arguments = ["-e", SystemNowPlaying.perlLoader, library.path]
             let output = Pipe()
             process.standardOutput = output
             process.standardError = FileHandle.nullDevice
