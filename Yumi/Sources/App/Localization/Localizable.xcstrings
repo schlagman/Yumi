@@ -14234,6 +14234,56 @@
           }
         }
       }
+    },
+    "attend ton clic": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "waiting for your click"
+          }
+        }
+      }
+    },
+    "a un souci": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "has a problem"
+          }
+        }
+      }
+    },
+    "à regarder": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "worth a look"
+          }
+        }
+      }
+    },
+    "pas finie": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "didn't finish"
+          }
+        }
+      }
+    },
+    "tourne encore": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "still running"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

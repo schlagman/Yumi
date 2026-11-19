@@ -12,9 +12,9 @@ Commandes (depuis `Yumi/`) :
 - `RoutineRun` garde la dernière exécution par tâche et calcule son état.
 
 **Critères d'acceptation :**
-- [ ] Une carte sans `scheduledTaskId`, ou un JSON invalide, donne nil sans planter.
-- [ ] Les 5 états de la spec sont calculés avec une horloge fixe.
-- [ ] Rapport : lignes coupées à 3 et 120 caractères, lien `file:` ou `javascript:` retiré, statut inconnu → nil.
+- [x] Une carte sans `scheduledTaskId`, ou un JSON invalide, donne nil sans planter.
+- [x] Les 5 états de la spec sont calculés avec une horloge fixe.
+- [x] Rapport : lignes coupées à 3 et 120 caractères, lien `file:` ou `javascript:` retiré, statut inconnu → nil.
 
 **Vérification :** tests `Yumi/Tests/Modules/RoutinesTests.swift` verts ; build Debug.
 **Dépendances :** aucune.
