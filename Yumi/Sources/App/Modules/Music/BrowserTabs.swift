@@ -15,13 +15,15 @@ struct BrowserTab: Equatable, Sendable {
     /// nil for a browser not in `browsers`.
     static func script(browser: String) -> String? {
         guard browsers.contains(browser) else { return nil }
+        // The tab character is named outside the browser's block: inside it, `tab` is the browser's tab class
         return """
+        set separator to tab
         with timeout of 5 seconds
             tell application id "\(browser)"
                 set out to ""
                 repeat with w in windows
                     repeat with t in tabs of w
-                        if (URL of t) contains "youtube.com/" then set out to out & (title of t) & tab & (URL of t) & linefeed
+                        if (URL of t) contains "youtube.com/" then set out to out & (title of t) & separator & (URL of t) & linefeed
                     end repeat
                 end repeat
                 return out
