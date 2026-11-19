@@ -16,24 +16,35 @@ struct SystemNowPlaying: Decodable, Equatable, Sendable {
     /// When `elapsed` was true, in seconds since 1970.
     var timestamp: Double?
 
-    /// Prints the Now Playing as one line of JSON.
-    static let readScript = """
+    /// Prints the Now Playing as one line of JSON each time it changes, looking twice a second,
+    /// until Yumi is gone (its parent becomes launchd).
+    static let watchScript = """
     ObjC.import('Foundation');
     $.NSBundle.bundleWithPath('/System/Library/PrivateFrameworks/MediaRemote.framework/').load;
+    ObjC.bindFunction('getppid', ['int', []]);
     const R = $.NSClassFromString('MRNowPlayingRequest');
-    const path = R.localNowPlayingPlayerPath, item = R.localNowPlayingItem;
-    const info = item.isNil() ? null : item.nowPlayingInfo;
-    const value = k => { if (!info || info.isNil()) return null; const x = info.objectForKey(k); return x.isNil() ? null : ObjC.unwrap(x); };
-    const stamp = info && !info.isNil() ? info.objectForKey('kMRMediaRemoteNowPlayingInfoTimestamp') : null;
-    JSON.stringify({
-      bundle: path.isNil() ? null : ObjC.unwrap(path.client.bundleIdentifier),
-      parent: path.isNil() ? null : ObjC.unwrap(path.client.parentApplicationBundleIdentifier),
-      playing: ObjC.unwrap(R.localIsPlaying) === true,
-      title: value('kMRMediaRemoteNowPlayingInfoTitle'), artist: value('kMRMediaRemoteNowPlayingInfoArtist'),
-      album: value('kMRMediaRemoteNowPlayingInfoAlbum'), duration: value('kMRMediaRemoteNowPlayingInfoDuration'),
-      elapsed: value('kMRMediaRemoteNowPlayingInfoElapsedTime'),
-      timestamp: stamp && !stamp.isNil() ? stamp.timeIntervalSince1970 : null
-    });
+    const stdout = $.NSFileHandle.fileHandleWithStandardOutput;
+    function read() {
+      const path = R.localNowPlayingPlayerPath, item = R.localNowPlayingItem;
+      const info = item.isNil() ? null : item.nowPlayingInfo;
+      const value = k => { if (!info || info.isNil()) return null; const x = info.objectForKey(k); return x.isNil() ? null : ObjC.unwrap(x); };
+      const stamp = info && !info.isNil() ? info.objectForKey('kMRMediaRemoteNowPlayingInfoTimestamp') : null;
+      return JSON.stringify({
+        bundle: path.isNil() ? null : ObjC.unwrap(path.client.bundleIdentifier),
+        parent: path.isNil() ? null : ObjC.unwrap(path.client.parentApplicationBundleIdentifier),
+        playing: ObjC.unwrap(R.localIsPlaying) === true,
+        title: value('kMRMediaRemoteNowPlayingInfoTitle'), artist: value('kMRMediaRemoteNowPlayingInfoArtist'),
+        album: value('kMRMediaRemoteNowPlayingInfoAlbum'), duration: value('kMRMediaRemoteNowPlayingInfoDuration'),
+        elapsed: value('kMRMediaRemoteNowPlayingInfoElapsedTime'),
+        timestamp: stamp && !stamp.isNil() ? stamp.timeIntervalSince1970 : null
+      });
+    }
+    let last = '';
+    while ($.getppid() !== 1) {
+      const line = read();
+      if (line !== last) { stdout.writeData($(line + '\\n').dataUsingEncoding($.NSUTF8StringEncoding)); last = line; }
+      delay(0.5);
+    }
     """
 
     /// Moves the track macOS shows as playing to `seconds`.
@@ -62,6 +73,55 @@ struct SystemNowPlaying: Decodable, Equatable, Sendable {
     }
 
     #if !APPSTORE
+    /// `watchScript` running in `osascript`: each line it prints is handed to `onChange` on the
+    /// main thread. Started again by `start` when it ended.
+    @MainActor
+    final class Watch {
+        private var process: Process?
+
+        var isRunning: Bool { process?.isRunning == true }
+
+        func start(onChange: @escaping @MainActor @Sendable (SystemNowPlaying?) -> Void) {
+            guard !isRunning else { return }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-l", "JavaScript", "-e", SystemNowPlaying.watchScript]
+            let output = Pipe()
+            process.standardOutput = output
+            process.standardError = FileHandle.nullDevice
+            let lines = LineBuffer()
+            output.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                guard !data.isEmpty else { handle.readabilityHandler = nil; return }
+                // Only the newest line counts: it says what plays now
+                guard let line = lines.append(data).last else { return }
+                let now = SystemNowPlaying.parse(line)
+                Task { @MainActor in onChange(now) }
+            }
+            do { try process.run() } catch { return }
+            self.process = process
+        }
+
+        func stop() {
+            process?.terminate()
+            process = nil
+        }
+    }
+
+    /// The bytes of a line not yet ended, kept for the next read. Touched from one reading
+    /// thread at a time.
+    private final class LineBuffer: @unchecked Sendable {
+        private var pending = Data()
+
+        func append(_ data: Data) -> [String] {
+            pending.append(data)
+            guard let end = pending.lastIndex(of: UInt8(ascii: "\n")) else { return [] }
+            let complete = pending[..<end]
+            pending = Data(pending[pending.index(after: end)...])
+            return complete.split(separator: UInt8(ascii: "\n")).compactMap { String(data: Data($0), encoding: .utf8) }
+        }
+    }
+
     /// Runs `script` in `osascript`, off the main thread, and gives back what it printed (nil on
     /// failure, or after five seconds).
     static func run(_ script: String, completion: @escaping @Sendable (String?) -> Void) {
