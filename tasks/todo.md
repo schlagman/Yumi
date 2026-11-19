@@ -56,7 +56,7 @@ Commandes (depuis `Yumi/`) :
 - Préparer, pour chaque `SKILL.md` de `~/.claude/scheduled-tasks/`, l'étape finale qui écrit le rapport. Montrer le diff de chaque fichier et ne rien écrire sans accord.
 
 **Critères d'acceptation :**
-- [ ] Le format est documenté.
+- [x] Le format est documenté.
 - [ ] Les diffs sont proposés ; rien n'est écrit dans `~/.claude/` sans accord.
 
 **Vérification :** relecture.

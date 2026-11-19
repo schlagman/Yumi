@@ -37,7 +37,7 @@ scripts/                  release and translation helpers
 | `Context/` | What is in front of the person (app, window, page), only when they allow it | nothing above it |
 | `Memory/` | What Yumi remembers about the person, readable and erasable | Contracts |
 | `Initiative/` | When Yumi speaks first, and how rarely | Contracts, Memory |
-| `Modules/` | One folder per module (Claude Code, GitHub, Notion, Mail, Agenda, Notes, Focus, Music, Weather, Screen time). Each produces a `ModuleSnapshot` and is filed under a tab (`ModuleCategory`). | Contracts, Core |
+| `Modules/` | One folder per module (Claude Code, Routines, GitHub, Notion, Mail, Agenda, Notes, Focus, Music, Weather, Screen time). Each produces a `ModuleSnapshot` and is filed under a tab (`ModuleCategory`). | Contracts, Core |
 | `Core/` | Typed events, session store, chat plumbing, hook settings, studio mode | Contracts |
 | `Contracts/` | Plain types shared between parts (snapshots, character commands, island look). No logic, no views | nothing |
 | `Settings/` | The settings window | everything it configures |
@@ -70,6 +70,21 @@ Claude Code hook (python relay installed by Yumi)
   → the island: session pills, approval card, question, finished or error
   → your answer goes back through the socket to Claude Code
 ```
+
+## A routine's report
+
+The Routines module shows the last run of each scheduled task of the Claude app. It reads only a few fields of the app's session files (see `Modules/ClaudeCode/ClaudeAppCard.swift`). A task, or any script, can add what it found by writing `Reports/<task id>.json` in Yumi's support folder (`~/Library/Application Support/Yumi/Reports/`):
+
+```json
+{ "title": "Weekly report", "status": "ok", "lines": ["12 new leads", "3 to call back"], "link": "https://…", "at": "2027-01-15T08:00:00Z" }
+```
+
+- `status` is `ok`, `warn` or `fail`.
+- `lines` holds up to 3 lines of 120 characters.
+- `title`, `link` and `at` are optional. `at` is ISO 8601; a report older than the run it sits next to is ignored.
+- The file name is the task's folder name in `~/.claude/scheduled-tasks/`.
+- The file is read as untrusted text: over 64 KB it is ignored, a link opens only on a click and only in `http` or `https`.
+- The module is not in the App Store build: the Claude app's files are outside the sandbox.
 
 ## Where to start
 
