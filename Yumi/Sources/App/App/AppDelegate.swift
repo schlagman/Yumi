@@ -290,7 +290,7 @@ final class YumiCore {
                                           onInstallHooks: { IslandActions.openSettings(.claudeCode) })
         let agenda = AgendaModule()
         let focus = FocusModule()
-        let notes = NotesModule(keep: { GoogleKeep.credentials(KeychainStore.shared.get) })
+        let notes = NotesModule(tasks: { GoogleTasks.credentials(KeychainStore.shared.get) })
         let weather = WeatherModule()
         let music = MusicModule()
         let notion = NotionModule(api: Self.notionAPI,

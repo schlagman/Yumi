@@ -2545,16 +2545,6 @@
         }
       }
     },
-    "Ce fichier n'est pas la clé JSON d'un compte de service.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This file is not a service account's JSON key."
-          }
-        }
-      }
-    },
     "Ce que je fais sans te demander": {
       "localizations": {
         "en": {
@@ -2605,12 +2595,12 @@
         }
       }
     },
-    "Chaque note que tu gardes avec Yumi part aussi dans ton Google Keep, et « Tout voir » l'ouvre. Il faut un compte Google Workspace dont l'administrateur a autorisé ce client OAuth (délégation au niveau du domaine, accès à Keep) : l'ID et le code secret viennent de lui et restent dans le trousseau du Mac.": {
+    "Chaque note que tu gardes avec Yumi devient aussi une tâche de ta liste Google Tasks, et « Tout voir » l'ouvre. Il faut un ID client OAuth à toi (console Google Cloud, type Application de bureau, Google Tasks API activée) : l'ID et le code secret restent dans le trousseau du Mac.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Every note you keep with Yumi also goes to your Google Keep, and “See all” opens it. It takes a Google Workspace account whose administrator allowed this OAuth client (domain-wide delegation, Keep access): the ID and the secret come from them and stay in the Mac's keychain."
+            "value": "Every note you keep with Yumi also becomes a task in your Google Tasks list, and “See all” opens it. It takes an OAuth client ID of your own (Google Cloud console, Desktop app type, Google Tasks API on): the ID and the secret stay in the Mac's keychain."
           }
         }
       }
@@ -2651,16 +2641,6 @@
         }
       }
     },
-    "Choisir sa clé JSON…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose its JSON key…"
-          }
-        }
-      }
-    },
     "Choisir…": {
       "localizations": {
         "en": {
@@ -2687,16 +2667,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Choose the Notion database in Settings > General."
-          }
-        }
-      }
-    },
-    "Choisis la clé JSON du compte de service": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose the service account's JSON key"
           }
         }
       }
@@ -3055,16 +3025,6 @@
         }
       }
     },
-    "Clé gardée dans le trousseau. Tu peux supprimer le fichier.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Key kept in the Keychain. You can delete the file."
-          }
-        }
-      }
-    },
     "Clé retirée.": {
       "localizations": {
         "en": {
@@ -3131,16 +3091,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Account"
-          }
-        }
-      }
-    },
-    "Compte de service": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Service account"
           }
         }
       }
@@ -3881,12 +3831,12 @@
         }
       }
     },
-    "Gardée ici, Google Keep ne l'a pas prise (%@).": {
+    "Gardée ici, Google Tasks ne l'a pas prise (%@).": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kept here, Google Keep did not take it (%@)."
+            "value": "Kept here, Google Tasks did not take it (%@)."
           }
         }
       }
@@ -3931,22 +3881,12 @@
         }
       }
     },
-    "Google Keep": {
+    "Google Tasks": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Google Keep"
-          }
-        }
-      }
-    },
-    "Google ne laisse ouvrir Keep à une app que par l'administrateur Google Workspace : il crée un compte de service, l'autorise pour Keep (délégation au niveau du domaine) et te donne sa clé JSON. Yumi la garde dans le trousseau du Mac : supprime ensuite le fichier. Chaque note que tu gardes avec Yumi part aussi dans ton Keep, et « Tout voir » l'ouvre.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Google lets an app into Keep only through the Google Workspace administrator: they create a service account, allow it for Keep (domain-wide delegation) and give you its JSON key. Yumi keeps it in the Mac's Keychain: delete the file afterwards. Every note you keep with Yumi also goes to your Keep, and “See all” opens it."
+            "value": "Google Tasks"
           }
         }
       }
@@ -4577,32 +4517,12 @@
         }
       }
     },
-    "Oublier la clé": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forget the key"
-          }
-        }
-      }
-    },
     "Pas de retour du navigateur.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "The browser did not come back."
-          }
-        }
-      }
-    },
-    "Pas de réponse de Google.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No answer from Google."
           }
         }
       }
@@ -4673,36 +4593,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Your messages and plan requests go to Groq. The free tier is enough to try; beyond it, billed by Groq per use."
-          }
-        }
-      }
-    },
-    "Ton adresse Google": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Your Google address"
-          }
-        }
-      }
-    },
-    "Vérification…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checking…"
-          }
-        }
-      }
-    },
-    "Vérifier": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Check"
           }
         }
       }
@@ -11185,16 +11075,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "▍"
-          }
-        }
-      }
-    },
-    "✓ Google ouvre ton Keep à Yumi.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "✓ Google opens your Keep to Yumi."
           }
         }
       }

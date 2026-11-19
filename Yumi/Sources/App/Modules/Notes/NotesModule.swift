@@ -14,21 +14,21 @@ final class NotesModule: YumiModule {
     private var onChange: (@MainActor () -> Void)?
     private var storeObserver: NSObjectProtocol?
     private var refreshing: Task<Void, Never>?
-    /// Google Keep's credentials, once connected in the settings (read from the Keychain by the app).
-    private let keep: @MainActor () -> GoogleKeep.Credentials?
-    /// Why the last note did not reach Keep; nil once one does.
-    private var keepProblem: String?
+    /// Google Tasks' credentials, once connected in the settings (read from the Keychain by the app).
+    private let tasks: @MainActor () -> GoogleTasks.Credentials?
+    /// Why the last note did not reach Google Tasks; nil once one does.
+    private var tasksProblem: String?
 
     init(store: NotesStore = NotesStore(fileURL: AppIdentity.supportDirectory.appendingPathComponent("notes.txt")),
-         keep: @escaping @MainActor () -> GoogleKeep.Credentials? = { nil }) {
+         tasks: @escaping @MainActor () -> GoogleTasks.Credentials? = { nil }) {
         self.store = store
-        self.keep = keep
+        self.tasks = tasks
     }
 
     var snapshot: ModuleSnapshot {
         var snapshot = NotesSummary.snapshot(notes: notes, reminders: reminders, remindersAccess: access, now: Date())
-        // A note Keep did not take stays here, and the island says so (unless a reminder has the stage)
-        if let keepProblem, reminders.isEmpty { snapshot.subtitle = keepProblem }
+        // A note Google Tasks did not take stays here, and the island says so (unless a reminder has the stage)
+        if let tasksProblem, reminders.isEmpty { snapshot.subtitle = tasksProblem }
         return snapshot
     }
 
@@ -91,15 +91,15 @@ final class NotesModule: YumiModule {
                 complete(featured)
             } else if let text = NSPasteboard.general.string(forType: .string), store.add(text) != nil {
                 notes = store.load()
-                sendToKeep(text)
+                sendToTasks(text)
             }
         case .secondary:
             if access == .notDetermined {
                 requestAccess()
             } else if featured != nil {
                 openReminders()
-            } else if keep() != nil {
-                NSWorkspace.shared.open(GoogleKeep.webURL)
+            } else if tasks() != nil {
+                NSWorkspace.shared.open(GoogleTasks.webURL)
             } else {
                 store.ensureFileExists()
                 NSWorkspace.shared.open(store.fileURL)
@@ -109,18 +109,18 @@ final class NotesModule: YumiModule {
         }
     }
 
-    /// The note goes to Google Keep whole (the file keeps one capped line), once Keep is connected.
-    private func sendToKeep(_ text: String) {
-        guard let credentials = keep() else { return }
+    /// The note goes to Google Tasks whole (the file keeps one capped line), once Tasks is connected.
+    private func sendToTasks(_ text: String) {
+        guard let credentials = tasks() else { return }
         let note = text.trimmingCharacters(in: .whitespacesAndNewlines)
         Task { [weak self] in
             do {
-                try await GoogleKeep.add(note, with: credentials)
-                self?.keepProblem = nil
+                try await GoogleTasks.add(note, with: credentials)
+                self?.tasksProblem = nil
             } catch {
                 let why: String
-                if case GoogleKeep.Failure.refused(let word)? = error as? GoogleKeep.Failure { why = word } else { why = loc("pas de réponse") }
-                self?.keepProblem = loc("Gardée ici, Google Keep ne l'a pas prise (\(why)).")
+                if case GoogleTasks.Failure.refused(let word)? = error as? GoogleTasks.Failure { why = word } else { why = loc("pas de réponse") }
+                self?.tasksProblem = loc("Gardée ici, Google Tasks ne l'a pas prise (\(why)).")
             }
             self?.onChange?()
         }

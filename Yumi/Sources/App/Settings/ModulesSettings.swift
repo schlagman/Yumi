@@ -1,6 +1,4 @@
-import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Modules: which ones Yumi shows and in what order, then the settings of GitHub, Notion, Agenda and screen time.
 /// Keys go to the Keychain, under the same names as before.
@@ -68,7 +66,7 @@ struct ModulesSettings: View {
                 .id("module-settings-screen-time")
             MusicSettingsSection()
                 .id("module-settings-music")
-            GoogleKeepSection()
+            GoogleTasksSection()
                 .id("module-settings-notes")
         }
         }
@@ -267,76 +265,57 @@ private struct MusicSettingsSection: View {
     }
 }
 
-/// Notes: Google Keep, through a service account the Workspace administrator allowed for Keep.
-private struct GoogleKeepSection: View {
-    @State private var account = KeychainStore.shared.get(GoogleKeep.serviceAccountKey)
-    @State private var user = KeychainStore.shared.get(GoogleKeep.userKey) ?? ""
-    @State private var checking = false
+/// Notes: Google Tasks, through an OAuth client of the person's own (no administrator needed).
+private struct GoogleTasksSection: View {
+    @State private var clientID = KeychainStore.shared.get(GoogleTasks.clientIDKey) ?? ""
+    @State private var secret = KeychainStore.shared.get(GoogleTasks.clientSecretKey) ?? ""
+    @State private var connected = KeychainStore.shared.get(GoogleTasks.refreshTokenKey)?.isEmpty == false
+    @State private var waiting = false
     @State private var status: String?
 
     var body: some View {
         Section {
-            LabeledContent(loc("Compte de service")) {
-                Text(verbatim: account ?? loc("aucun")).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-            }
-            HStack {
-                Button(loc("Choisir sa clé JSON…")) { chooseKey() }
-                if account != nil { Button(loc("Oublier la clé")) { forgetKey() } }
-            }
-            TextField(loc("Ton adresse Google"), text: $user)
-                .onChange(of: user) { _, value in KeychainStore.shared.set(GoogleKeep.userKey, value: value.trimmingCharacters(in: .whitespacesAndNewlines)) }
-            HStack {
-                Button(checking ? loc("Vérification…") : loc("Vérifier")) { check() }
-                    .disabled(checking || account == nil || user.nonEmptyTrimmed == nil)
-                if let status { Text(status).foregroundStyle(.secondary).lineLimit(2) }
+            if connected {
+                LabeledContent("Google Tasks") { Text(loc("Connecté")).foregroundStyle(.secondary) }
+                Button(loc("Se déconnecter")) {
+                    KeychainStore.shared.remove(GoogleTasks.refreshTokenKey)
+                    connected = false
+                }
+            } else {
+                TextField(loc("ID client OAuth"), text: $clientID)
+                SecureField(loc("Code secret du client"), text: $secret)
+                HStack {
+                    Button(waiting ? loc("En attente du navigateur…") : loc("Se connecter à Google")) { connect() }
+                        .disabled(waiting || clientID.nonEmptyTrimmed == nil || secret.nonEmptyTrimmed == nil)
+                    if let status { Text(status).foregroundStyle(.secondary).lineLimit(2) }
+                }
             }
         } header: {
-            Text("Google Keep")
+            Text("Google Tasks")
         } footer: {
-            SettingsHelp(loc("Google ne laisse ouvrir Keep à une app que par l'administrateur Google Workspace : il crée un compte de service, l'autorise pour Keep (délégation au niveau du domaine) et te donne sa clé JSON. Yumi la garde dans le trousseau du Mac : supprime ensuite le fichier. Chaque note que tu gardes avec Yumi part aussi dans ton Keep, et « Tout voir » l'ouvre."))
+            SettingsHelp(loc("Chaque note que tu gardes avec Yumi devient aussi une tâche de ta liste Google Tasks, et « Tout voir » l'ouvre. Il faut un ID client OAuth à toi (console Google Cloud, type Application de bureau, Google Tasks API activée) : l'ID et le code secret restent dans le trousseau du Mac."))
         }
     }
 
-    private func chooseKey() {
-        let panel = NSOpenPanel()
-        panel.message = loc("Choisis la clé JSON du compte de service")
-        panel.allowedContentTypes = [.json]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let key = try GoogleKeep.serviceAccount(fromJSON: try Data(contentsOf: url))
-            _ = try GoogleKeep.privateKey(pem: key.privateKey)
-            KeychainStore.shared.set(GoogleKeep.serviceAccountKey, value: key.email)
-            KeychainStore.shared.set(GoogleKeep.privateKeyKey, value: key.privateKey)
-            account = key.email
-            status = loc("Clé gardée dans le trousseau. Tu peux supprimer le fichier.")
-        } catch {
-            status = loc("Ce fichier n'est pas la clé JSON d'un compte de service.")
-        }
-    }
-
-    private func forgetKey() {
-        KeychainStore.shared.remove(GoogleKeep.serviceAccountKey)
-        KeychainStore.shared.remove(GoogleKeep.privateKeyKey)
-        account = nil
-        status = nil
-    }
-
-    private func check() {
-        guard let credentials = GoogleKeep.credentials(KeychainStore.shared.get) else { return }
-        checking = true
+    private func connect() {
+        let id = clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        KeychainStore.shared.set(GoogleTasks.clientIDKey, value: id)
+        KeychainStore.shared.set(GoogleTasks.clientSecretKey, value: key)
+        waiting = true
         status = nil
         Task {
             do {
-                try await GoogleKeep.check(credentials)
-                status = loc("✓ Google ouvre ton Keep à Yumi.")
-            } catch GoogleKeep.Failure.refused(let word) {
+                KeychainStore.shared.set(GoogleTasks.refreshTokenKey, value: try await GoogleTasks.signIn(clientID: id, clientSecret: key))
+                connected = true
+            } catch GoogleTasks.Failure.refused(let word) {
                 status = loc("Refusé par Google : \(word).")
-            } catch GoogleKeep.Failure.badKey {
-                status = loc("Ce fichier n'est pas la clé JSON d'un compte de service.")
+            } catch GoogleTasks.Failure.timedOut {
+                status = loc("Pas de retour du navigateur.")
             } catch {
-                status = loc("Pas de réponse de Google.")
+                status = loc("La connexion n'a pas abouti.")
             }
-            checking = false
+            waiting = false
         }
     }
 }
