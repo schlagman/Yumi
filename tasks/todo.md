@@ -29,9 +29,9 @@ Commandes (depuis `Yumi/`) :
 - Branchement : enregistré hors `APPSTORE` ; onglet Travail ; profils « bureau » et « code » ; mise en page `sessions` dans l'île.
 
 **Critères d'acceptation :**
-- [ ] Au lancement, chaque tâche planifiée déjà exécutée a sa ligne.
-- [ ] Un `Reports/<id>.json` écrit à la main change la ligne en moins de 2 s.
-- [ ] `needsAttention` ne reste vrai que tant que l'exécution ratée n'a pas été vue.
+- [x] Au lancement, chaque tâche planifiée déjà exécutée a sa ligne.
+- [x] Un `Reports/<id>.json` écrit à la main change la ligne en moins de 2 s.
+- [x] `needsAttention` ne reste vrai que tant que l'exécution ratée n'a pas été vue.
 
 **Vérification :** build Debug et App Store ; lancement avec `YUMI_SUPPORT_DIR` et `YUMI_TRACE_MODULES=1` ; `YUMI_STUDIO=1` n'affiche que la routine fictive.
 **Dépendances :** tâche 1.

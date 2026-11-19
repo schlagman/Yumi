@@ -16,7 +16,7 @@ Le détail de chaque tâche est dans `tasks/todo.md`.
 
 ### Phase 1 : Routines
 - [x] Tâche 1 : décodeurs purs (carte de l'app Claude, rapport, état d'une exécution) et leurs tests
-- [ ] Tâche 2 : le module Routines visible dans l'île, avec de vraies données
+- [x] Tâche 2 : le module Routines visible dans l'île, avec de vraies données
 - [ ] Tâche 3 : la remarque d'initiative « la routine X n'a pas fini »
 - [ ] Tâche 4 : documenter le format des rapports et proposer l'étape à ajouter aux `SKILL.md`
 

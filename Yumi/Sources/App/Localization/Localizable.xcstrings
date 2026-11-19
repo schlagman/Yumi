@@ -14284,6 +14284,66 @@
           }
         }
       }
+    },
+    "Routines": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Routines"
+          }
+        }
+      }
+    },
+    "%lld routines": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld routines"
+          }
+        }
+      }
+    },
+    "%lld à voir": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld to check"
+          }
+        }
+      }
+    },
+    "%@ : %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %@"
+          }
+        }
+      }
+    },
+    "Aucune routine pour l'instant": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No routines yet"
+          }
+        }
+      }
+    },
+    "Les tâches planifiées de l'app Claude s'afficheront ici.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Claude app's scheduled tasks will show up here."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

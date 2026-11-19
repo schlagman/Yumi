@@ -45,7 +45,7 @@ Le décodeur pur `ClaudeAppCard` vit dans `Modules/ClaudeCode/ClaudeAppCard.swif
 - date : `lastActivityAt`, ou `at` du rapport s'il est plus récent ;
 - action : ouvrir l'exécution dans l'app Claude, ou le lien du rapport s'il n'y a pas d'exécution.
 
-**Le module** : id `routines`, nom « Routines », onglet Travail. Il reprend la mise en page des sessions Claude Code (`ModuleActivity`, cas `sessions`). Statut : « 3 routines », ou « 1 à voir ».
+**Le module** : id `routines`, nom « Routines », onglet Travail. Il n'est pas ajouté aux profils du premier lancement ; une mise à jour l'ajoute une fois à la sélection existante (`ModuleSelection.welcome`). Il reprend la mise en page des sessions Claude Code (`ModuleActivity`, cas `sessions`). Statut : « 3 routines », ou « 1 à voir ».
 
 **Attention** : `needsAttention` est vrai si une exécution des 12 dernières heures est en état 1, 2 ou 3 et que tu n'as pas encore ouvert le module depuis. L'id de l'exécution vue est gardé dans `UserDefaults`.
 
@@ -58,7 +58,7 @@ Le décodeur pur `ClaudeAppCard` vit dans `Modules/ClaudeCode/ClaudeAppCard.swif
 
 **Exclusions** :
 - Build App Store : le module n'existe pas (`#if !APPSTORE`), car les fichiers de l'app Claude sont hors du bac à sable.
-- `YUMI_STUDIO=1` : rien n'est lu ; une routine fictive « Relevé hebdo » s'affiche, terminée.
+- `YUMI_STUDIO=1` : aucun module ne démarre en mode tournage (`LaunchPlan`), donc rien n'est lu.
 
 **Côté routines (hors dépôt)** : une étape finale dans chaque `SKILL.md` de `~/.claude/scheduled-tasks/`, qui écrit le rapport. On la propose fichier par fichier, diff à l'appui, après ton accord. Le format est documenté dans `docs/architecture.md`.
 

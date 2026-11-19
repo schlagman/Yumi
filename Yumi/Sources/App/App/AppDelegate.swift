@@ -343,8 +343,14 @@ final class YumiCore {
             .map(ChatAnnouncement.init)
             .removeDuplicates()
             .sink { [weak claudeCode] in claudeCode?.announceChat($0) }
+        // The Claude app's files are out of the App Store sandbox's reach: no routines there.
+        #if APPSTORE
+        let routines: [any YumiModule] = []
+        #else
+        let routines: [any YumiModule] = [RoutinesModule()]
+        #endif
         modules = ModuleRegistry(
-            modules: [
+            modules: ([
                 claudeCode,
                 agenda,
                 notes,
@@ -378,7 +384,7 @@ final class YumiCore {
                         initiative.notice(.mail(from: mail.from, subject: mail.subject, count: count))
                     },
                     onConnect: { NotificationCenter.default.post(name: .openFullSettings, object: SettingsPage.modules) }),
-            ],
+            ] as [any YumiModule]) + routines,
             onPublish: { snapshots in
                 state.modules = snapshots
                 Self.trace(snapshots)
