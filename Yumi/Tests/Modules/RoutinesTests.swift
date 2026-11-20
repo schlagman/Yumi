@@ -160,3 +160,48 @@ private func report(_ fields: [String: Any]) -> Data {
         #expect(routine().row(now: now, waitingLive: false).detail == "Relevé envoyé par mail.")
     }
 }
+
+@Suite struct RoutineFilesTests {
+    private func folder() -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("routines-\(UUID().uuidString)")
+        try! FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test func aSessionFileIsReadAgainOnlyWhenItChanged() throws {
+        let dir = folder(), file = dir.appendingPathComponent("\(runID).json")
+        let date = Date(timeIntervalSince1970: 1_800_000_000)
+        try card(["completedTurns": 0]).write(to: file)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: file.path)
+        let first = ClaudeAppCard.scheduledRuns(in: dir)
+        #expect(first.runs.first?.completedTurns == 0)
+
+        // Same date: the file is not opened again
+        try card(["completedTurns": 3]).write(to: file)
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: file.path)
+        #expect(ClaudeAppCard.scheduledRuns(in: dir, known: first.known).runs.first?.completedTurns == 0)
+
+        // A new date: it is
+        try FileManager.default.setAttributes([.modificationDate: date.addingTimeInterval(60)], ofItemAtPath: file.path)
+        #expect(ClaudeAppCard.scheduledRuns(in: dir, known: first.known).runs.first?.completedTurns == 3)
+    }
+
+    @Test func aSessionStartedByHandIsNoRun() throws {
+        let dir = folder()
+        try card(["scheduledTaskId": NSNull()]).write(to: dir.appendingPathComponent("\(runID).json"))
+        #expect(ClaudeAppCard.scheduledRuns(in: dir).runs.isEmpty)
+    }
+
+    @Test func aReportWithoutDateTakesTheDateOfItsFile() throws {
+        let dir = folder(), file = dir.appendingPathComponent("releve-hebdo.json")
+        try report(["status": "fail"]).write(to: file)
+        let written = Date(timeIntervalSince1970: 1_800_000_000)
+        try FileManager.default.setAttributes([.modificationDate: written], ofItemAtPath: file.path)
+        // A name that is not a task's is left out
+        try report(["status": "ok"]).write(to: dir.appendingPathComponent("pas une tâche.json"))
+        let reports = RoutinesModule.reports(in: dir)
+        #expect(reports["releve-hebdo"]?.at == written)
+        #expect(reports.count == 1)
+    }
+}
+

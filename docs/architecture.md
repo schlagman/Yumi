@@ -81,7 +81,8 @@ The Routines module shows the last run of each scheduled task of the Claude app.
 
 - `status` is `ok`, `warn` or `fail`.
 - `lines` holds up to 3 lines of 120 characters.
-- `title`, `link` and `at` are optional. `at` is ISO 8601; a report older than the run it sits next to is ignored.
+- `title`, `link` and `at` are optional. `at` is ISO 8601 (the file's date when missing); a report older than the run it sits next to is ignored.
+- Write the report to a temporary file, then rename it to `<task id>.json`: Yumi watches the folder, so a file rewritten in place is only seen at the next event of a Claude app session.
 - The file name is the task's folder name in `~/.claude/scheduled-tasks/`.
 - The file is read as untrusted text: over 64 KB it is ignored, a link opens only on a click and only in `http` or `https`.
 - The module is not in the App Store build: the Claude app's files are outside the sandbox.

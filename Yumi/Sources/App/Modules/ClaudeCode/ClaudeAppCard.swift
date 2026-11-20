@@ -35,18 +35,34 @@ struct ClaudeAppCard: Equatable, Sendable {
                              needsAction: summary?["needs_action"] as? Bool ?? false)
     }
 
-    /// The runs of scheduled tasks, from the app's files. Files of other sessions are skipped before
-    /// being parsed, and files over 5 MB are not read (same limit as the hook script).
-    static func scheduledRuns(in folder: URL = folder) -> [ClaudeAppCard] {
-        let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.fileSizeKey])
-        var runs: [ClaudeAppCard] = []
+    /// A file already looked at: its date, and the run it holds (nil when it holds none).
+    struct Seen: Equatable, Sendable {
+        var modified: Date
+        var card: ClaudeAppCard?
+    }
+
+    /// The runs of scheduled tasks, from the app's files. A file whose date has not changed since
+    /// `known` is not opened again: the app keeps every session, so the folder only grows.
+    /// Files of other sessions are skipped before being parsed, and files over 5 MB are not read
+    /// (same limit as the hook script).
+    static func scheduledRuns(in folder: URL = folder, known: [String: Seen] = [:]) -> (runs: [ClaudeAppCard], known: [String: Seen]) {
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: Array(keys))
+        var seen: [String: Seen] = [:]
         while let url = files?.nextObject() as? URL {
             guard url.pathExtension == "json", url.lastPathComponent.hasPrefix("local_"),
-                  ((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? .max) <= 5_000_000,
-                  let data = try? Data(contentsOf: url), data.range(of: Data("scheduledTaskId".utf8)) != nil,
-                  let card = decode(data), card.routine != nil else { continue }
-            runs.append(card)
+                  let values = try? url.resourceValues(forKeys: keys), let modified = values.contentModificationDate else { continue }
+            if let old = known[url.path], old.modified == modified {
+                seen[url.path] = old
+                continue
+            }
+            var card: ClaudeAppCard?
+            if (values.fileSize ?? .max) <= 5_000_000, let data = try? Data(contentsOf: url),
+               data.range(of: Data("scheduledTaskId".utf8)) != nil, let read = decode(data), read.routine != nil {
+                card = read
+            }
+            seen[url.path] = Seen(modified: modified, card: card)
         }
-        return runs
+        return (seen.values.compactMap(\.card), seen)
     }
 }

@@ -18,6 +18,8 @@ final class RoutinesModule: YumiModule {
     private let defaults: UserDefaults
     private let onTrouble: @MainActor (_ name: String, _ failed: Bool) -> Void
     private var routines: [Routine] = []
+    /// The Claude app's files already read, so that only the ones that changed are read again.
+    private var known: [String: ClaudeAppCard.Seen] = [:]
     /// The Claude app ids of the sessions waiting for the person right now.
     private var waiting: Set<String> = []
     private var onChange: (@MainActor () -> Void)?
@@ -42,7 +44,7 @@ final class RoutinesModule: YumiModule {
         let first = toLook.first ?? routines.first
         return ModuleSnapshot(
             id: id, name: loc("Routines"), colorHex: "#6FD3A8",
-            status: toLook.isEmpty ? loc("\(routines.count) routines") : loc("\(toLook.count) à voir"),
+            status: !toLook.isEmpty ? loc("\(toLook.count) à voir") : routines.count == 1 ? loc("1 routine") : loc("\(routines.count) routines"),
             title: first.map { loc("\($0.name) : \($0.status(now: now, waitingLive: isWaiting($0)).label)") } ?? loc("Aucune routine pour l'instant"),
             subtitle: first.map { $0.row(now: now, waitingLive: isWaiting($0)).detail }
                 ?? loc("Les tâches planifiées de l'app Claude s'afficheront ici."),
@@ -106,7 +108,9 @@ final class RoutinesModule: YumiModule {
     func receive(_ event: YumiEvent, sessions: [SessionID: Session]) {
         let waitingNow = Set(sessions.values.filter { $0.status == .waitingForUser }.compactMap { $0.origin?.hostSessionID }.filter { !$0.isEmpty })
         switch event {
-        case .taskCompleted, .sessionEnded, .permissionRequested, .questionRequested: scan()
+        case .taskCompleted, .sessionEnded, .permissionRequested, .questionRequested:
+            // Only a session of the Claude app can be a routine's run; one already gone may have been.
+            if let id = event.sessionID, sessions[id]?.origin.map({ $0.hostSessionID.isEmpty }) != true { scan() }
         default: break
         }
         guard waitingNow != waiting else { return }
@@ -122,12 +126,14 @@ final class RoutinesModule: YumiModule {
         guard scanning == nil else { return again = true }
         scanning = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
-            let folder = Self.reportsFolder
-            let found = await Task.detached(priority: .utility) {
-                Routine.all(runs: ClaudeAppCard.scheduledRuns(), reports: Self.reports(in: folder))
+            let folder = Self.reportsFolder, known = self?.known ?? [:]
+            let (found, read) = await Task.detached(priority: .utility) {
+                let runs = ClaudeAppCard.scheduledRuns(known: known)
+                return (Routine.all(runs: runs.runs, reports: Self.reports(in: folder)), runs.known)
             }.value
             guard let self, !Task.isCancelled else { return }
             self.scanning = nil
+            self.known = read
             if self.again {
                 self.again = false
                 self.scan(after: 0)
@@ -138,20 +144,28 @@ final class RoutinesModule: YumiModule {
         }
     }
 
-    private nonisolated static func reports(in folder: URL) -> [String: RoutineReport] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.fileSizeKey])) ?? []
+    /// The reports, by task. One without `at` is dated by its file, so that each new one counts
+    /// as new and one left by an earlier run is not taken for the last run's.
+    nonisolated static func reports(in folder: URL) -> [String: RoutineReport] {
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(keys))) ?? []
         var reports: [String: RoutineReport] = [:]
         for url in files where url.pathExtension == "json" {
             let id = url.deletingPathExtension().lastPathComponent
             guard id.wholeMatch(of: /[A-Za-z0-9_][A-Za-z0-9._-]{0,99}/) != nil,
-                  ((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? .max) <= RoutineReport.maxBytes,
-                  let data = try? Data(contentsOf: url), let report = RoutineReport.decode(data) else { continue }
+                  let values = try? url.resourceValues(forKeys: keys), (values.fileSize ?? .max) <= RoutineReport.maxBytes,
+                  let data = try? Data(contentsOf: url), var report = RoutineReport.decode(data) else { continue }
+            if report.at == nil { report.at = values.contentModificationDate }
             reports[id] = report
         }
         return reports
     }
 
     /// A report written, replaced or removed is read within a second.
+    /// shortcut: watching the folder sees files added, renamed or removed, not a file rewritten in
+    /// place; that one is read at the next event of a Claude app session (a routine's own end).
+    /// Writers replace a report by renaming a new file over it (docs/architecture.md). Upgrade to
+    /// FSEvents file events if scripts that rewrite in place become common.
     private func watchReports() {
         let folder = Self.reportsFolder
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
