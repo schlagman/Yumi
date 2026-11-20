@@ -471,6 +471,16 @@
         }
       }
     },
+    "%@ depuis ce matin.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ since this morning."
+          }
+        }
+      }
+    },
     "%@ en %@.": {
       "localizations": {
         "en": {
@@ -853,6 +863,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ Notion tasks, including %@"
+          }
+        }
+      }
+    },
+    "%@ unités restantes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ units left"
           }
         }
       }
@@ -2165,6 +2185,16 @@
         }
       }
     },
+    "Branche Semrush dans les réglages": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect Semrush in the settings"
+          }
+        }
+      }
+    },
     "Brancher": {
       "localizations": {
         "en": {
@@ -2996,6 +3026,16 @@
       }
     },
     "Clé API": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API key"
+          }
+        }
+      }
+    },
+    "Clé d'API": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -4517,6 +4557,16 @@
         }
       }
     },
+    "Lecture du solde…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading the balance…"
+          }
+        }
+      }
+    },
     "Les paroles synchronisées viennent de LRCLIB (lrclib.net), gratuit et sans compte : je ne lui envoie que le titre et l'artiste du morceau. Musique et Spotify disent où en est le morceau ; pour YouTube et YouTube Music, je compte depuis le début du morceau, les paroles peuvent avoir un peu d'avance ou de retard. Dès le prochain morceau.": {
       "localizations": {
         "en": {
@@ -4557,6 +4607,16 @@
         }
       }
     },
+    "Rien de consommé depuis ce matin.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing used since this morning."
+          }
+        }
+      }
+    },
     "Se connecter à Google": {
       "localizations": {
         "en": {
@@ -4573,6 +4633,76 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sign out"
+          }
+        }
+      }
+    },
+    "Semrush": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semrush"
+          }
+        }
+      }
+    },
+    "Semrush : %@ unités aujourd'hui": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semrush: %@ units today"
+          }
+        }
+      }
+    },
+    "Semrush a répondu par une erreur (%@)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semrush answered with an error (%@)"
+          }
+        }
+      }
+    },
+    "Semrush a répondu quelque chose d'inattendu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semrush gave an unexpected answer"
+          }
+        }
+      }
+    },
+    "Semrush ne répond pas": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semrush is not answering"
+          }
+        }
+      }
+    },
+    "Semrush ne répond pas comme prévu": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semrush is not answering as expected"
+          }
+        }
+      }
+    },
+    "Semrush refuse la clé, vérifie-la dans les réglages": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semrush refuses the key, check it in the settings"
           }
         }
       }
@@ -4607,12 +4737,52 @@
         }
       }
     },
+    "Solde à zéro : clé inconnue ou unités épuisées.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Balance at zero: unknown key or units used up."
+          }
+        }
+      }
+    },
+    "Ta clé d'API est dans Semrush, Subscription info › API units. Je ne fais qu'une requête, celle du solde, que Semrush ne facture pas. Le solde est celui du compte : toute l'équipe compte dans la consommation du jour.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your API key is in Semrush, Subscription info › API units. I make only one request, the balance, which Semrush does not charge. The balance is the account's: the whole team counts in the day's usage."
+          }
+        }
+      }
+    },
+    "Ta clé d'API, pour suivre les unités restantes.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your API key, to follow the units left."
+          }
+        }
+      }
+    },
     "Tes messages et les demandes de plan partent chez Groq. Le palier gratuit suffit pour essayer ; au-delà, facturé par Groq à l'usage.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Your messages and plan requests go to Groq. The free tier is enough to try; beyond it, billed by Groq per use."
+          }
+        }
+      }
+    },
+    "Unités par mois": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Units per month"
           }
         }
       }
@@ -9181,6 +9351,16 @@
         }
       }
     },
+    "il n'y a pas de clé Semrush dans les réglages": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "there is no Semrush key in the settings"
+          }
+        }
+      }
+    },
     "je n'ai pas accès %@, autorise Yumi dans Réglages Système, Confidentialité et sécurité": {
       "localizations": {
         "en": {
@@ -10317,6 +10497,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "on %@"
+          }
+        }
+      }
+    },
+    "sur %@ par mois": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "of %@ a month"
           }
         }
       }

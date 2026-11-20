@@ -8,7 +8,7 @@ final class SemrushModule: YumiModule {
     let id = "semrush"
     /// The request is free: every five minutes is plenty for a daily ceiling.
     static let interval: Duration = .seconds(300)
-    /// The team's rule: no more than this many units in a session without asking first.
+    /// The team's rule (no more than this many units in a session without asking), counted over the day.
     static let dailyCeiling = 15_000
     static let monthlyKey = "semrush.monthlyUnits"
     static let defaultMonthly = 100_000
@@ -38,6 +38,9 @@ final class SemrushModule: YumiModule {
         return value > 0 ? value : defaultMonthly
     }
 
+    /// Semrush answers 0 to a key it does not know, as to an account with nothing left.
+    static var emptyBalance: String { loc("Solde à zéro : clé inconnue ou unités épuisées.") }
+
     /// "47 300" in French, "47,300" in English.
     static func units(_ value: Int) -> String { value.formatted(.number.locale(AppLanguage.locale)) }
 
@@ -64,16 +67,17 @@ final class SemrushModule: YumiModule {
         snapshot.status = Self.units(day.latest)
         snapshot.title = loc("\(Self.units(day.latest)) unités restantes")
         snapshot.subtitle = problem.map { FrenchText.sentenceStart($0.reason) + "." }
-            ?? (used == 0 ? loc("Rien de consommé depuis ce matin.") : loc("\(Self.units(used)) depuis ce matin."))
+            ?? (day.latest == 0 ? Self.emptyBalance
+                : used == 0 ? loc("Rien de consommé depuis ce matin.") : loc("\(Self.units(used)) depuis ce matin."))
         let fraction = min(1, Double(day.latest) / Double(monthly))
         snapshot.progress = ModuleProgress(fraction: fraction,
                                            leading: fraction.formatted(.percent.precision(.fractionLength(0)).locale(AppLanguage.locale)),
-                                           trailing: loc("sur \(Self.units(monthly))"))
+                                           trailing: loc("sur \(Self.units(monthly)) par mois"))
         if used > Self.dailyCeiling {
             snapshot.needsAttention = true
-            // Above a session at work and the turns to see, below the chat's own activity and an approval.
+            // Above the music, a focus and the chat at work (all activity), below an approval.
             snapshot.live = ModuleLive(text: loc("Semrush : \(Self.units(used)) unités aujourd'hui"),
-                                       priority: ModuleLivePriority.activity - 5)
+                                       priority: ModuleLivePriority.activity + 5)
         }
         return snapshot
     }
@@ -99,14 +103,18 @@ final class SemrushModule: YumiModule {
         if hasKey { NSWorkspace.shared.open(Self.unitsPage) } else { openSettings() }
     }
 
-    /// One reading of the balance.
+    /// One reading of the balance. A reading the settings cancelled while it was out changes nothing:
+    /// the day was read again for the new key.
     func look() async {
         do {
-            let next = SemrushDay.after(day, reading: try await api.balance(), at: Date())
+            let balance = try await api.balance()
+            guard !Task.isCancelled else { return }
+            let next = SemrushDay.after(day, reading: balance, at: Date())
             next.save(to: defaults)
             day = next
             problem = nil
         } catch {
+            guard !Task.isCancelled else { return }
             problem = error
         }
         onChange?()
@@ -150,13 +158,14 @@ struct SemrushDay: Codable, Equatable, Sendable {
         day == Self.name(of: date, calendar: calendar) ? used : 0
     }
 
-    /// The day after a new reading. A new day, or a balance that went up (units renewed or bought),
-    /// counts again from this reading.
+    /// The day after a new reading. A new day counts again from this reading; a balance that went up
+    /// (units renewed or bought) moves the start up as much, so what the day used still counts.
     static func after(_ previous: SemrushDay?, reading balance: Int, at date: Date, calendar: Calendar = .current) -> SemrushDay {
         let day = name(of: date, calendar: calendar)
-        guard var current = previous, current.day == day, balance <= current.latest else {
+        guard var current = previous, current.day == day else {
             return SemrushDay(day: day, start: balance, latest: balance)
         }
+        current.start += max(0, balance - current.latest)
         current.latest = balance
         return current
     }

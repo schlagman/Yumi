@@ -7,7 +7,7 @@ import Foundation
 enum SemrushError: Error, Equatable, Sendable {
     /// No key saved.
     case noKey
-    /// "ERROR 120 :: WRONG KEY - ID PAIR".
+    /// "ERROR 120 :: WRONG KEY - ID PAIR", or a 400, 401 or 403 answer.
     case keyRefused
     case network
     /// Another answer: its code ("ERROR 130", "HTTP 502"), never the key nor the address.
@@ -31,7 +31,15 @@ struct SemrushAPI: Sendable {
     static let balanceURL = URL(string: "https://www.semrush.com/users/countapiunits.html")!
 
     var key: @Sendable () -> String?
-    var transport: Transport = { try await URLSession.shared.data(for: $0) }
+    var transport: Transport = { try await Self.session.data(for: $0) }
+
+    /// No disk cache and no cookies: the address carries the key, and a shared session would keep it
+    /// in the app's URL cache.
+    private static let session: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        return URLSession(configuration: configuration)
+    }()
 
     /// The units left on the account. The key goes in the address, as Semrush asks, over HTTPS only;
     /// the underlying error is dropped, since it carries that address.
@@ -43,19 +51,21 @@ struct SemrushAPI: Sendable {
         let data: Data
         let response: URLResponse
         do { (data, response) = try await transport(URLRequest(url: url, timeoutInterval: 20)) } catch { throw .network }
-        let body = String(decoding: data, as: UTF8.self)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        // Semrush tells its errors in a line of text, whatever the status.
-        if !(200..<300).contains(status), !body.uppercased().contains("ERROR") { throw .unexpected("HTTP \(status)") }
-        return try Self.remaining(from: body)
+        // A key it does not accept: 400 with the key repeated in the body, which stays unread.
+        if [400, 401, 403].contains(status) { throw .keyRefused }
+        guard (200..<300).contains(status) else { throw .unexpected("HTTP \(status)") }
+        return try Self.remaining(from: String(decoding: data, as: UTF8.self))
     }
 
     /// "1,000", "47300", " 47 300\n": the number, whatever separates its thousands.
     static func remaining(from body: String) throws(SemrushError) -> Int {
         let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.uppercased().hasPrefix("ERROR") {
-            if text.uppercased().contains("WRONG KEY") || text.hasPrefix("ERROR 120") { throw .keyRefused }
-            throw .unexpected(String(text.prefix { $0 != ":" }).trimmingCharacters(in: .whitespaces))
+        let upper = text.uppercased()
+        if upper.hasPrefix("ERROR") {
+            if upper.contains("WRONG KEY") || upper.hasPrefix("ERROR 120") { throw .keyRefused }
+            // Only the code: the rest of the line may repeat the key.
+            throw .unexpected(upper.prefixMatch(of: /ERROR \d+/).map { String($0.output) } ?? "")
         }
         let digits = text.filter { !",. \u{00A0}\u{202F}".contains($0) }
         guard !digits.isEmpty, digits.allSatisfy({ $0.isASCII && $0.isNumber }), let value = Int(digits) else {

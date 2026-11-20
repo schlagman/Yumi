@@ -24,6 +24,7 @@ struct SemrushSettingsSection: View {
                         KeychainStore.shared.remove(Self.keyName)
                         connected = false
                         status = nil
+                        failed = false
                         keyChanged()
                     }
                 }
@@ -60,8 +61,9 @@ struct SemrushSettingsSection: View {
         loading = true
         defer { loading = false }
         do {
-            status = loc("\(SemrushModule.units(try await api.balance())) unités restantes")
-            failed = false
+            let balance = try await api.balance()
+            status = balance == 0 ? SemrushModule.emptyBalance : loc("\(SemrushModule.units(balance)) unités restantes")
+            failed = balance == 0
         } catch {
             status = FrenchText.sentenceStart(error.reason)
             failed = true

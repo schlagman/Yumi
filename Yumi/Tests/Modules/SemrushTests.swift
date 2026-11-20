@@ -39,6 +39,16 @@ private func at(_ day: Int, _ hour: Int) -> Date {
         #expect(throws: SemrushError.unexpected("ERROR 130")) { try SemrushAPI.remaining(from: "ERROR 130 :: API DISABLED") }
         #expect(throws: SemrushError.unexpected("")) { try SemrushAPI.remaining(from: "") }
         #expect(throws: SemrushError.unexpected("")) { try SemrushAPI.remaining(from: "<html>Bad gateway</html>") }
+        // Only the code: the rest of the line may repeat the key.
+        #expect(throws: SemrushError.unexpected("")) { try SemrushAPI.remaining(from: "ERROR for sm_secret+key") }
+    }
+
+    @Test func aRefusedKeyIsSaidWithoutRepeatingTheBody() async {
+        for status in [400, 401, 403] {
+            await #expect(throws: SemrushError.keyRefused) {
+                try await api(#"{"code":\#(status),"message":"Invalid key sm_secret+key"}"#, status: status).balance()
+            }
+        }
     }
 
     @Test func theOneRequestIsTheFreeBalanceOverHTTPS() async throws {
@@ -67,13 +77,15 @@ private func at(_ day: Int, _ hour: Int) -> Date {
         #expect(day.start == 50_000 && day.latest == 50_000 && day.used == 0)
     }
 
-    @Test func aLowerReadingCountsAndAHigherOneStartsAgain() {
+    @Test func aLowerReadingCountsAndATopUpKeepsWhatTheDayUsed() {
         var day = SemrushDay.after(nil, reading: 50_000, at: at(20, 7), calendar: paris)
         day = SemrushDay.after(day, reading: 47_850, at: at(20, 11), calendar: paris)
         #expect(day.used == 2_150)
-        // Units bought or renewed: the day counts again from the new balance.
+        // 100 000 units renewed at noon: the 2 150 of the morning still count.
         day = SemrushDay.after(day, reading: 147_850, at: at(20, 12), calendar: paris)
-        #expect(day.start == 147_850 && day.used == 0)
+        #expect(day.used == 2_150)
+        day = SemrushDay.after(day, reading: 146_850, at: at(20, 15), calendar: paris)
+        #expect(day.used == 3_150)
     }
 
     @Test func anotherDayStartsFromZero() {
@@ -151,8 +163,8 @@ private func module(_ bodies: [String?], key: String? = "sm_secret", monthly: In
         let snapshot = over.snapshot
         #expect(snapshot.needsAttention)
         #expect(snapshot.live?.text.contains(SemrushModule.units(15_500)) == true)
-        // Above a session at work and the turns to see, below the chat's activity and an approval.
-        #expect(snapshot.live.map { $0.priority > ClaudeSessions.workingPriority + 10 && $0.priority < ModuleLivePriority.activity } == true)
+        // Above the music and a focus, below an approval.
+        #expect(snapshot.live.map { $0.priority > ModuleLivePriority.activity && $0.priority < ModuleLivePriority.attention } == true)
     }
 
     @Test func anErrorKeepsTheLastBalanceAndSaysWhy() async {
@@ -165,6 +177,26 @@ private func module(_ bodies: [String?], key: String? = "sm_secret", monthly: In
         await down.look()
         #expect(down.snapshot.status == SemrushModule.units(50_000))
         #expect(down.snapshot.subtitle.contains(FrenchText.sentenceStart(SemrushError.network.reason)))
+    }
+
+    @Test func aBalanceOfZeroSaysTheKeyMayBeUnknown() async {
+        // Semrush answers 0 to a key it does not know, as to an account with nothing left.
+        let tile = module(["0"])
+        await tile.look()
+        #expect(tile.snapshot.subtitle == SemrushModule.emptyBalance)
+    }
+
+    @Test func aReadingCancelledInFlightChangesNothing() async {
+        let defaults = UserDefaults(suiteName: "semrush-module-\(UUID().uuidString)")!
+        // The settings change while the request is out: the polling is cancelled before the answer.
+        let api = SemrushAPI(key: { "sm_secret" }, transport: { request in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return (Data("50,000".utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        let tile = SemrushModule(api: api, defaults: defaults)
+        await Task { await tile.look() }.value
+        #expect(SemrushDay.load(from: defaults) == nil)
+        #expect(tile.snapshot.status == "…")
     }
 
     @Test func theTileLivesInTheWorkTab() {

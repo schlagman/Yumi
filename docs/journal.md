@@ -655,3 +655,21 @@ Validé avec l'auteur le 19 novembre 2026, pour qui garde une dizaine de session
 - **Les sessions annexes** suivent leur session mère, précédées de « ↳ ». La famille prend la place de son membre le plus urgent.
 - **Écartée : la jauge du forfait.** Claude Code ne la donne qu'à sa barre d'état et à l'app Claude, et aucun hook ne la transmet. Lire le jeton de Claude Code dans le trousseau pour interroger l'API d'utilisation reviendrait à prendre le secret d'une autre app. À rouvrir si un hook expose `rate_limits`.
 
+## La tuile Semrush (branche `semrush-credits`)
+
+Validé avec l'auteur le 20 novembre 2026 : son équipe a environ 100 000 unités d'API Semrush par mois, et pas plus de 15 000 par session sans accord.
+
+- **Une seule requête, gratuite.** `GET https://www.semrush.com/users/countapiunits.html?key=…`, que la doc Semrush annonce à « 0 API units per request ». Elle répond par un nombre en texte (`1,000`).
+  - Une clé mal formée revient en 400, avec la clé recopiée dans la réponse : Yumi lit 400, 401 et 403 comme « clé refusée », sans lire la réponse. Une ligne `ERROR …` ne garde que son code (`ERROR 130`).
+  - Une clé inconnue mais bien formée répond `0`, comme un compte vide : la tuile et « Tester » disent « clé inconnue ou unités épuisées ».
+  - La clé va dans l'adresse, comme l'exige Semrush : HTTPS seulement, et aucune erreur de Yumi ne garde la clé ni l'adresse. La session réseau est éphémère, sans cache disque ni cookies : avec la session partagée, l'adresse et donc la clé restaient dans le cache d'URL de l'app (`~/Library/Caches/app.yumi`).
+  - La clé vit dans le trousseau (`semrush-api-key`). Réglages › Modules › Semrush : la clé, « Tester », « Retirer la clé », « Unités par mois ».
+- **Un relevé toutes les 5 minutes**, tant que la tuile est choisie. L'onglet est Travail.
+- **Ce que la tuile montre :**
+  - les unités restantes ;
+  - une jauge sur le total du mois (100 000 par défaut, réglable : l'API ne donne ni ce total ni la date de renouvellement) ;
+  - la consommation depuis le premier relevé du jour. Elle compte toute l'équipe, puisque le solde est celui du compte.
+  - Le point de départ du jour (`SemrushDay`, dans les préférences) survit à une relance. Il repart le lendemain ou après un changement de clé. Une recharge (solde qui remonte) décale le départ d'autant : ce qui a été consommé avant reste compté.
+- **Au-delà de 15 000 unités dans la journée**, l'île repliée le dit (« Semrush : N unités aujourd'hui »). Priorité 55 : au-dessus de la musique, d'un focus et du chat au travail (50), sous une demande d'accord. L'île s'ouvre d'elle-même une fois, au franchissement (`needsAttention`).
+- **Impossible avec cette API :** savoir quelle session ou quelle personne a consommé, et la date de renouvellement. Écartée : l'alerte « moins de 10 % du mois ».
+
