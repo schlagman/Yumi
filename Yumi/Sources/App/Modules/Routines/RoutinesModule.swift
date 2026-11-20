@@ -40,6 +40,7 @@ final class RoutinesModule: YumiModule {
     var snapshot: ModuleSnapshot {
         let now = Date()
         let rows = routines.map { $0.row(now: now, waitingLive: isWaiting($0)) }
+        let seen = seen
         let toLook = routines.filter { needsLook($0, now: now) && !seen.contains(Self.key(of: $0)) }
         let first = toLook.first ?? routines.first
         return ModuleSnapshot(
@@ -121,7 +122,7 @@ final class RoutinesModule: YumiModule {
     // MARK: Reading
 
     /// Reads the runs and the reports again, off the main thread. Calls close together make one read.
-    private func scan(after delay: TimeInterval = 1) {
+    private func scan(after delay: TimeInterval = 5) {
         guard onChange != nil else { return }
         guard scanning == nil else { return again = true }
         scanning = Task { [weak self] in
@@ -138,7 +139,6 @@ final class RoutinesModule: YumiModule {
                 self.again = false
                 self.scan(after: 0)
             }
-            guard found != self.routines else { return }
             self.routines = found
             self.changed()
         }
@@ -147,13 +147,15 @@ final class RoutinesModule: YumiModule {
     /// The reports, by task. One without `at` is dated by its file, so that each new one counts
     /// as new and one left by an earlier run is not taken for the last run's.
     nonisolated static func reports(in folder: URL) -> [String: RoutineReport] {
-        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]
         let files = (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(keys))) ?? []
         var reports: [String: RoutineReport] = [:]
         for url in files where url.pathExtension == "json" {
             let id = url.deletingPathExtension().lastPathComponent
             guard id.wholeMatch(of: /[A-Za-z0-9_][A-Za-z0-9._-]{0,99}/) != nil,
-                  let values = try? url.resourceValues(forKeys: keys), (values.fileSize ?? .max) <= RoutineReport.maxBytes,
+                  // A link is never followed: it could lead to a huge file, or to /dev/zero
+                  let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true,
+                  (values.fileSize ?? .max) <= RoutineReport.maxBytes,
                   let data = try? Data(contentsOf: url), var report = RoutineReport.decode(data) else { continue }
             if report.at == nil { report.at = values.contentModificationDate }
             reports[id] = report
@@ -184,11 +186,9 @@ final class RoutinesModule: YumiModule {
         let now = Date()
         let told = Set(defaults.stringArray(forKey: Self.toldKey) ?? [])
         for routine in routines where needsLook(routine, now: now) && !told.contains(Self.key(of: routine)) {
-            let status = routine.status(now: now, waitingLive: isWaiting(routine))
-            // A run waiting for a click is already in Claude Code's list, with its approval.
-            guard status != .waiting else { continue }
+            guard let failed = routine.status(now: now, waitingLive: isWaiting(routine)).trouble else { continue }
             remember([Self.key(of: routine)], under: Self.toldKey)
-            onTrouble(routine.name, status == .failed)
+            onTrouble(routine.name, failed)
         }
         nextChange?.cancel()
         let quiet = routines.compactMap { routine -> Date? in
@@ -199,7 +199,8 @@ final class RoutinesModule: YumiModule {
             nextChange = Task { [weak self] in
                 try? await Task.sleep(for: .seconds(max(1, quiet.timeIntervalSinceNow)), tolerance: .seconds(30))
                 guard !Task.isCancelled else { return }
-                self?.changed()
+                // Read again before saying it stopped: the app may have written the end of the run since.
+                self?.scan(after: 0)
             }
         }
         onChange?()
@@ -217,7 +218,8 @@ final class RoutinesModule: YumiModule {
     /// Opens the run in the Claude app, or the report's page when there is no run. Seen from then on.
     private func open(_ id: String) {
         guard let routine = routines.first(where: { $0.id == id }) else { return }
-        remember([Self.key(of: routine)], under: Self.seenKey)
+        // A run opened while it was fine still asks for attention if it goes wrong later.
+        if needsLook(routine, now: Date()) { remember([Self.key(of: routine)], under: Self.seenKey) }
         if let link = SessionHost.deepLink(for: SessionOrigin(hostSessionID: routine.run?.sessionID ?? "")) ?? routine.report?.link {
             NSWorkspace.shared.open(link)
         }

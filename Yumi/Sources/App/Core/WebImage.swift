@@ -22,7 +22,8 @@ enum WebImage {
             kCGImageSourceThumbnailMaxPixelSize: min(max(width, height), longestSide),
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        let transparent = properties[kCGImagePropertyHasAlpha] as? Bool ?? false
+        // Design tools export opaque pictures with an alpha channel: only real transparency keeps a PNG.
+        let transparent = properties[kCGImagePropertyHasAlpha] as? Bool == true && isTransparent(image)
         let type: UTType = transparent ? .png : .jpeg
         let output = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(output, type.identifier as CFString, 1, nil) else { return nil }
@@ -30,5 +31,27 @@ enum WebImage {
         CGImageDestinationAddImage(destination, image, transparent ? nil : [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return (output as Data, transparent ? "png" : "jpg")
+    }
+
+    /// True when ImageIO can read files of this name: the button is offered for those only
+    /// (an SVG is an image, but ImageIO cannot open one).
+    static func canConvert(fileNamed name: String) -> Bool {
+        guard let type = UTType(filenameExtension: (name as NSString).pathExtension), type.conforms(to: .image) else { return false }
+        return (CGImageSourceCopyTypeIdentifiers() as? [String] ?? []).contains(type.identifier)
+    }
+
+    /// True when at least one pixel is not fully opaque.
+    private static func isTransparent(_ image: CGImage) -> Bool {
+        let width = image.width, height = image.height
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return true }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let pixels = context.data?.assumingMemoryBound(to: UInt8.self) else { return true }
+        let row = context.bytesPerRow
+        for y in 0..<height {
+            for x in 0..<width where pixels[y * row + x * 4 + 3] < 255 { return true }
+        }
+        return false
     }
 }

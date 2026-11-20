@@ -46,12 +46,14 @@ struct ClaudeAppCard: Equatable, Sendable {
     /// Files of other sessions are skipped before being parsed, and files over 5 MB are not read
     /// (same limit as the hook script).
     static func scheduledRuns(in folder: URL = folder, known: [String: Seen] = [:]) -> (runs: [ClaudeAppCard], known: [String: Seen]) {
-        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey]
+        let keys: Set<URLResourceKey> = [.fileSizeKey, .contentModificationDateKey, .isRegularFileKey]
         let files = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: Array(keys))
         var seen: [String: Seen] = [:]
         while let url = files?.nextObject() as? URL {
             guard url.pathExtension == "json", url.lastPathComponent.hasPrefix("local_"),
-                  let values = try? url.resourceValues(forKeys: keys), let modified = values.contentModificationDate else { continue }
+                  // A link is never followed: it could lead to a huge file
+                  let values = try? url.resourceValues(forKeys: keys), values.isRegularFile == true,
+                  let modified = values.contentModificationDate else { continue }
             if let old = known[url.path], old.modified == modified {
                 seen[url.path] = old
                 continue

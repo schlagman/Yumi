@@ -214,6 +214,15 @@ private final class ClaudeSessionJournalsTestDouble {
         #expect(journal.context == 85)
     }
 
+    @Test func aCompactStartsTheGaugeAgain() {
+        var journal = SessionJournal(started: start, context: 85)
+        if let kind = note(hook("SessionStart", ["source": "compact"])) { journal.apply(kind, now: start) }
+        #expect(journal.context == nil)
+        var resumed = SessionJournal(started: start, context: 40)
+        if let kind = note(hook("SessionStart", ["source": "resume"])) { resumed.apply(kind, now: start) }
+        #expect(resumed.context == 40)
+    }
+
     @Test func aRoomyContextLeavesTheSummary() {
         var journal = SessionJournal(started: start)
         if let kind = SessionNote.from(hook("Stop", ["transcript_path": "/tmp/t.jsonl"]), transcript: { _ in

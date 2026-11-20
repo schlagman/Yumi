@@ -131,6 +131,16 @@ private func report(_ fields: [String: Any]) -> Data {
         #expect(routine(turns: 0, lastActivity: 3000).status(now: now, waitingLive: false) == .running)
     }
 
+    @Test func whatYumiSaysFitsWhatHappened() {
+        #expect(RoutineStatus.unfinished.trouble == false)
+        #expect(RoutineStatus.failed.trouble == true)
+        // A report that asks for a look is a problem, not a run that stopped halfway
+        #expect(RoutineStatus.warning.trouble == true)
+        // A run waiting for a click is already in Claude Code's list, with its approval
+        #expect(RoutineStatus.waiting.trouble == nil)
+        #expect(RoutineStatus.running.trouble == nil && RoutineStatus.done.trouble == nil)
+    }
+
     @Test func theLatestRunOfEachTaskIsKept() {
         var older = ClaudeAppCard.decode(card())!
         older.created = created.addingTimeInterval(-86_400)
@@ -189,6 +199,19 @@ private func report(_ fields: [String: Any]) -> Data {
     @Test func aSessionStartedByHandIsNoRun() throws {
         let dir = folder()
         try card(["scheduledTaskId": NSNull()]).write(to: dir.appendingPathComponent("\(runID).json"))
+        #expect(ClaudeAppCard.scheduledRuns(in: dir).runs.isEmpty)
+    }
+
+    @Test func aLinkIsNeverFollowed() throws {
+        // A link could lead to a huge file, or to one that never ends (/dev/zero)
+        let dir = folder(), elsewhere = folder()
+        try report(["status": "fail"]).write(to: elsewhere.appendingPathComponent("releve-hebdo.json"))
+        try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("releve-hebdo.json"),
+                                                   withDestinationURL: elsewhere.appendingPathComponent("releve-hebdo.json"))
+        #expect(RoutinesModule.reports(in: dir).isEmpty)
+        try card().write(to: elsewhere.appendingPathComponent("\(runID).json"))
+        try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("\(runID).json"),
+                                                   withDestinationURL: elsewhere.appendingPathComponent("\(runID).json"))
         #expect(ClaudeAppCard.scheduledRuns(in: dir).runs.isEmpty)
     }
 

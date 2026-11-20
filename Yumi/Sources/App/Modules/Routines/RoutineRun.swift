@@ -52,6 +52,16 @@ enum RoutineStatus: Equatable, Sendable {
 
     /// Worth the person's attention: something to do or something that went wrong.
     var needsLook: Bool { ![.running, .done].contains(self) }
+
+    /// What Yumi says of it on his own: true "a problem", false "did not finish", nil nothing.
+    /// A run waiting for a click is already in Claude Code's list, with its approval.
+    var trouble: Bool? {
+        switch self {
+        case .failed, .warning:          return true
+        case .unfinished:                return false
+        case .waiting, .running, .done:  return nil
+        }
+    }
 }
 
 /// One scheduled task: its last run in the Claude app and the report it left, either may be missing.

@@ -16,6 +16,8 @@ struct SessionNote: Equatable, Sendable {
         /// when the transcript could be read.
         case stop(lastMessage: String?, context: Int?)
         case notification(String)
+        /// /compact or /clear started the context again.
+        case contextReset
         case ended
     }
 
@@ -49,6 +51,9 @@ struct SessionNote: Equatable, Sendable {
             let context = tail.flatMap(SessionText.contextTokens(transcript:))
                 .map { SessionText.contextShare(tokens: $0, model: payload["host_model"] as? String) }
             return SessionNote(session: session, kind: .stop(lastMessage: message, context: context))
+        case "SessionStart":
+            guard ["compact", "clear"].contains(payload["source"] as? String) else { return nil }
+            return SessionNote(session: session, kind: .contextReset)
         case "Notification":
             guard let message = (payload["message"] as? String).flatMap({ SessionText.oneLine($0) }), !message.isEmpty else { return nil }
             return SessionNote(session: session, kind: .notification(message))
@@ -190,6 +195,8 @@ struct SessionJournal: Equatable, Sendable {
             summary = Self.summary(files: filesTouched.count, commands: commands, todos: todos, message: message)
         case .notification(let text):
             notification = text
+        case .contextReset:
+            context = nil
         case .ended:
             current = nil
             if summary == nil { summary = Self.summary(files: filesTouched.count, commands: commands, todos: todos, message: nil) }

@@ -17,6 +17,7 @@ Les longues sessions saturent leur contexte et se compactent au mauvais moment. 
 - Ligne de session (`ModuleRow` du module claude-code) : « Contexte 64 % » parmi les `details`, la ligne qu'on déplie.
 - À 80 % ou plus, quand la session est au repos (`Stop`, ni en train de travailler ni en attente), le détail de la ligne devient « Contexte à 85 %, pense à /compact ».
 - Pas de nouvelle remarque d'initiative : la ligne suffit.
+- Après `/compact` ou `/clear` (`SessionStart` de source `compact` ou `clear`), la jauge s'efface jusqu'au `Stop` suivant : l'ancien chiffre serait faux.
 
 ## Hors périmètre
 L'état « compacte » pendant la compaction : il faudrait installer le hook PreCompact, donc modifier `~/.claude/settings.json`. À faire plus tard, avec la procédure de sauvegarde, de diff et de confirmation.
