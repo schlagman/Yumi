@@ -223,6 +223,24 @@ private final class ClaudeSessionJournalsTestDouble {
         #expect(resumed.context == 40)
     }
 
+    @Test func eachSessionLineShowsItsContext() {
+        var journal = SessionJournal(started: start, context: 24)
+        let line = ModuleRow(id: "s1", title: "yumi", detail: "", state: .busy, label: "travaille")
+        #expect(SessionBoard.enriched(line, journal, now: start).gauge == 24)
+        journal.apply(.contextReset, now: start)
+        #expect(SessionBoard.enriched(line, journal, now: start).gauge == nil)
+    }
+
+    @Test func theEndOfATranscriptIsReadEvenWhenTheCutSplitsALetter() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("tail-\(UUID().uuidString).jsonl")
+        let text = "é\n" + assistantLine("Fini.", usage: ["input_tokens": 50_000]) + "\n"
+        try Data(text.utf8).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        // The read starts on the second byte of "é"
+        let tail = try #require(SessionText.readTail(url.path, bytes: text.utf8.count - 1))
+        #expect(SessionText.contextTokens(transcript: tail) == 50_000)
+    }
+
     @Test func aRoomyContextLeavesTheSummary() {
         var journal = SessionJournal(started: start)
         if let kind = SessionNote.from(hook("Stop", ["transcript_path": "/tmp/t.jsonl"]), transcript: { _ in

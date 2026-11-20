@@ -295,7 +295,8 @@ enum SessionText {
         defer { try? handle.close() }
         let size = (try? handle.seekToEnd()) ?? 0
         try? handle.seek(toOffset: size > UInt64(bytes) ? size - UInt64(bytes) : 0)
-        return (try? handle.readToEnd()).flatMap { String(data: $0, encoding: .utf8) }
+        // The cut may fall inside a letter ("é"): decoding repairs it instead of failing.
+        return (try? handle.readToEnd()).map { String(decoding: $0, as: UTF8.self) }
     }
 }
 

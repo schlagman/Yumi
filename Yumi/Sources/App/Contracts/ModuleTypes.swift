@@ -75,6 +75,8 @@ struct ModuleRow: Identifiable, Equatable, Sendable {
     var actionLabel: String? = nil
     /// A count shown next to the state: "3/7" for the tasks of a Claude Code session. nil for none.
     var progress: String? = nil
+    /// How full it is, in percent: the context of a Claude Code session. nil for none.
+    var gauge: Int? = nil
     /// Lines shown when the line is unfolded: the request, the task, the last actions. Empty:
     /// the line does not unfold, a click sends `action` as before.
     var details: [String] = []

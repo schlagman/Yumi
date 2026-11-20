@@ -358,6 +358,7 @@ struct SessionBoard: Equatable, Sendable {
         guard let journal else { return row }
         var row = row
         row.progress = journal.progress
+        row.gauge = journal.context
         row.details = journal.details(now: now)
         switch row.state {
         case .busy:

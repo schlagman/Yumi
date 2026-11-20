@@ -367,6 +367,12 @@ struct SessionSteps: View {
                     .font(IslandTheme.text(12, .regular))
                     .foregroundStyle(IslandCardTheme.mute)
                     .lineLimit(1)
+                if let gauge = row.gauge {
+                    Text(verbatim: "· " + loc("Contexte \(gauge) %"))
+                        .font(IslandTheme.text(12, .regular))
+                        .foregroundStyle(gauge >= 80 ? IslandTheme.amber : IslandCardTheme.mute)
+                        .lineLimit(1)
+                }
             }
             if !row.detail.isEmpty {
                 line(symbol: "chevron.right", text: row.detail, bright: true)

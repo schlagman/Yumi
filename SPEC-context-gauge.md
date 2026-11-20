@@ -14,7 +14,8 @@ Les longues sessions saturent leur contexte et se compactent au mauvais moment. 
 - Le pourcentage est arrondi à l'unité et borné entre 0 et 100.
 
 ## Affichage
-- Ligne de session (`ModuleRow` du module claude-code) : « Contexte 64 % » parmi les `details`, la ligne qu'on déplie.
+- Ligne de session (`ModuleRow.gauge` du module claude-code) : « 64 % » avec une petite jauge, sur la ligne elle-même, à côté de l'état ; « Contexte 64 % » sur la carte d'une session et dans les `details`, la ligne qu'on déplie. Ambre à partir de 80 %.
+- Valeur connue à la fin du premier tour qui suit le lancement de Yumi : le journal des sessions vit en mémoire.
 - À 80 % ou plus, quand la session est au repos (`Stop`, ni en train de travailler ni en attente), le détail de la ligne devient « Contexte à 85 %, pense à /compact ».
 - Pas de nouvelle remarque d'initiative : la ligne suffit.
 - Après `/compact` ou `/clear` (`SessionStart` de source `compact` ou `clear`), la jauge s'efface jusqu'au `Stop` suivant : l'ancien chiffre serait faux.

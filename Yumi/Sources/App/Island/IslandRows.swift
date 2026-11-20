@@ -132,6 +132,17 @@ private struct ModuleRowLine: View {
                         .background(Capsule().fill(Color.white.opacity(0.1)))
                         .fixedSize()
                 }
+                if let gauge = row.gauge {
+                    // How full the session's context is: amber from 80 %, when a /compact is worth it
+                    HStack(spacing: 3) {
+                        Image(systemName: "gauge.with.needle").font(.system(size: 9, weight: .semibold))
+                        Text(verbatim: "\(gauge) %").font(IslandTheme.round(10.5, .bold)).monospacedDigit()
+                    }
+                    .foregroundStyle(gauge >= 80 ? IslandTheme.amber : IslandTheme.muted)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .help(loc("Contexte \(gauge) %"))
+                }
                 Text(row.label)
                     .font(IslandTheme.text(11, .semibold))
                     .foregroundStyle(row.state == .neutral ? IslandTheme.muted : color)
@@ -155,7 +166,7 @@ private struct ModuleRowLine: View {
         .buttonStyle(.plain)
         .disabled(!clickable)
         .onHover { hover = $0 }
-        .accessibilityLabel("\(row.title), \(row.detail), \(row.label)")
+        .accessibilityLabel("\(row.title), \(row.detail), \(row.label)" + (row.gauge.map { ", " + loc("Contexte \($0) %") } ?? ""))
     }
 
     private var clickable: Bool { row.action != nil || !row.details.isEmpty }
