@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Settings, Modules, Semrush: the API key, a test, and the month's units, the tile's gauge total.
 struct SemrushSettingsSection: View {
-    /// The Keychain key of the Semrush API key.
-    static let keyName = "semrush-api-key"
+    /// The Keychain key of the Semrush API key. Read off the main actor, by the API's key closure.
+    nonisolated static let keyName = "semrush-api-key"
 
     @State private var key = ""
     @State private var connected = KeychainStore.shared.get(Self.keyName) != nil
