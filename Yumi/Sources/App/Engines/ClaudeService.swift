@@ -69,6 +69,8 @@ final class KeychainStore: @unchecked Sendable {
         "github-app-token",
         // Not "notion-api-key": that old name is erased once at launch.
         "notion-integration-key",
+        // Semrush: only the free balance request (Settings/SemrushSettings.swift).
+        "semrush-api-key",
         "gmail-app-password",
         // Google Tasks: the person's own OAuth client, and the refresh token.
         "google-tasks-client-id",

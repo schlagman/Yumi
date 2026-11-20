@@ -59,6 +59,8 @@ struct ModulesSettings: View {
                 .id("module-settings-gmail")
             NotionSettingsSection()
                 .id("module-settings-notion")
+            SemrushSettingsSection()
+                .id("module-settings-semrush")
 
             AgendaSettingsSection()
                 .id("module-settings-agenda")
@@ -88,7 +90,7 @@ private struct ModuleOrderSections: View {
     /// Shows the settings of a module further down the page.
     var showSettings: (String) -> Void = { _ in }
     /// The modules that have their own settings on this page.
-    static let withSettings: Set<String> = ["github", "notion", "agenda"]
+    static let withSettings: Set<String> = ["github", "notion", "semrush", "agenda"]
 
     var body: some View {
         let shown = lineup.selected
