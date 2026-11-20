@@ -358,6 +358,8 @@ final class YumiCore {
                     onBreak: { [initiative] in initiative.rested() },
                     openSettings: { NotificationCenter.default.post(name: .openFullSettings, object: SettingsPage.modules) }),
                 notion,
+                SemrushModule(api: SemrushAPI(key: { KeychainStore.shared.get(SemrushSettingsSection.keyName) }),
+                              openSettings: { NotificationCenter.default.post(name: .openFullSettings, object: SettingsPage.modules) }),
                 GitHubModule(
                     token: { GitHubAuth.currentToken },
                     prepare: { await GitHubAuth.shared.renewIfNeeded() },

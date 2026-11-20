@@ -19,7 +19,7 @@ enum ModuleCategory: String, CaseIterable, Sendable {
     /// The category of a module from its identifier alone.
     static func of(moduleID id: String) -> ModuleCategory {
         switch id {
-        case "claude-code", "github", "notion", "tasks", "taches": return .work
+        case "claude-code", "github", "notion", "semrush", "tasks", "taches": return .work
         case "agenda", "weather", "meteo", "notes", "gmail", "screen-time": return .day
         case "music", "musique":                                   return .relax
         // On its own: nothing else on screen while the timer runs
