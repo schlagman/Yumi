@@ -14454,6 +14454,16 @@
           }
         }
       }
+    },
+    "Nouvelle discussion": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New conversation"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

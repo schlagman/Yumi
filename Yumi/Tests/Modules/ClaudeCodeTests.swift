@@ -205,7 +205,8 @@ import Foundation
     @Test func theClaudeAppTitleNamesTheSessionOnceItGaveOne() {
         let scratch = "/Users/me/Library/Application Support/Claude/scratch-workspaces/x/y/scratch-2026-11-19-d3e6c3"
         var sessions = replay([hook("SessionStart", "a", cwd: scratch, ["host_session_id": "local_1"])])
-        #expect(ClaudeSessions.projectName(sessions[SessionID("a")]!) == "scratch-2026-11-19-d3e6c3")
+        // A session started without a folder is not named after its scratch folder while it waits for a title
+        #expect(ClaudeSessions.projectName(sessions[SessionID("a")]!) == "Nouvelle discussion")
         sessions = replay([
             hook("SessionStart", "a", cwd: scratch, ["host_session_id": "local_1"]),
             hook("Stop", "a", cwd: scratch, ["host_session_id": "local_1", "host_title": "Plan média décembre"]),

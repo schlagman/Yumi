@@ -1010,15 +1010,28 @@ import sys, json, os, socket, subprocess, glob, re
 def claude_app_session(event):
     # The Claude app gives each session an id (local_...) and files it with its title and, for a
     # side session, the session it came from. That file is not documented: anything unexpected
-    # leaves the fields out, and only the title, the parent and the model are read. Never on the frequent tool hooks.
+    # leaves the fields out, and only the title, the parent and the model are read. The frequent tool hooks read the title only.
     sid = os.environ.get('CLAUDE_CODE_HOST_SESSION_ID', '')
     if not re.fullmatch('local_[0-9a-f-]{36}', sid):
         return {}
     found = {'host_session_id': sid}
+    pattern = os.path.expanduser('~/Library/Application Support/Claude/claude-code-sessions/*/*/' + sid + '.json')
     if event in ('PreToolUse', 'PostToolUse', 'PostToolUseFailure'):
+        # Only the title, from the head of the file (it sits in the first few KB): cheap enough for
+        # every tool, so a session is named as soon as the app names it, even after Yumi relaunched.
+        try:
+            for path in glob.glob(pattern)[:1]:
+                with open(path, 'rb') as f:
+                    head = f.read(16384).decode('utf-8', 'ignore')
+                start = head.find('"title"')
+                if start >= 0:
+                    title, _ = json.JSONDecoder().raw_decode(head[head.index(':', start) + 1:].lstrip())
+                    if isinstance(title, str) and title.strip():
+                        found['host_title'] = title.strip()[:120]
+        except Exception:
+            pass
         return found
     try:
-        pattern = os.path.expanduser('~/Library/Application Support/Claude/claude-code-sessions/*/*/' + sid + '.json')
         for path in glob.glob(pattern)[:1]:
             if os.path.getsize(path) > 5000000:
                 break

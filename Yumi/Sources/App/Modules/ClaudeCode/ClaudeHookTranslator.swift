@@ -106,6 +106,9 @@ enum ClaudeHookTranslator {
     }
 
     static func projectName(forDirectory directory: String) -> String {
+        // The Claude app runs a session started without a folder in a scratch folder named after
+        // the day ("scratch-2026-11-19-d3e6c3"): until the app gives it a title, it is a new discussion.
+        if directory.contains("/Claude/scratch-workspaces/") { return loc("Nouvelle discussion") }
         let name = URL(fileURLWithPath: directory).lastPathComponent
         return directory.isEmpty || name.isEmpty || name == "/" ? "Session" : name
     }
