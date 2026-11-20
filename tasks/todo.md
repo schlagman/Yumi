@@ -57,7 +57,7 @@ Commandes (depuis `Yumi/`) :
 
 **Critères d'acceptation :**
 - [x] Le format est documenté.
-- [ ] Les diffs sont proposés ; rien n'est écrit dans `~/.claude/` sans accord.
+- [x] Les diffs sont proposés ; rien n'est écrit dans `~/.claude/` sans accord. Écrits après accord dans les deux routines encore actives qui rendent un résultat (leads du lundi, relevé GEO du 13 déc.) ; les autres sont désactivées, passées, ou interdisent d'écrire un fichier.
 
 **Vérification :** relecture.
 **Dépendances :** tâche 2.
@@ -65,9 +65,9 @@ Commandes (depuis `Yumi/`) :
 **Taille :** XS.
 
 ## Point de contrôle A
-- [ ] Builds Debug et App Store sans avertissement, tests verts
-- [ ] Vraies tâches planifiées visibles, rapport manuel affiché
-- [ ] Commit
+- [x] Builds Debug et App Store sans avertissement, tests verts
+- [ ] Vraies tâches planifiées visibles, rapport manuel affiché (lues sur les vrais fichiers, pas encore vues dans l'app)
+- [x] Commit
 
 ## Tâche 5 : jauge de contexte
 **Description :**
@@ -86,7 +86,7 @@ Commandes (depuis `Yumi/`) :
 **Taille :** M.
 
 ## Point de contrôle B
-- [ ] Tests verts, builds sans avertissement, commit
+- [x] Tests verts, builds sans avertissement, commit
 
 ## Tâche 6 : `WebImage.make`
 **Description :** avec ImageIO seulement :
@@ -122,5 +122,5 @@ Commandes (depuis `Yumi/`) :
 
 ## Point de contrôle C : terminé
 - [ ] Tous les critères des specs remplis
-- [ ] `/ponytail-review`, `/agent-skills:review`, `graphify update .`
-- [ ] Push sur `fork` après ton accord
+- [x] `/ponytail-review`, `/agent-skills:review` (`graphify update .` pas lancé)
+- [x] Push sur `fork` après ton accord
